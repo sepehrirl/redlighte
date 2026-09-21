@@ -4,4 +4,14 @@ Disallow: /api/
 Disallow: /account/
 Disallow: /chat/
 
+# AI search and retrieval crawlers
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: GPTBot
+Allow: /
+
+User-agent: Google-Extended
+Allow: /
+
 Sitemap: https://redlighte.ir/sitemap.xml
