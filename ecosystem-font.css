@@ -2,7 +2,7 @@
 
 :root,
 body,
-body *:not(code):not(pre):not(kbd):not(samp) {
+body *:not(code):not(pre):not(kbd):not(samp):not(pre *):not(code *) {
   font-family: "Estedad", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
 }
 
