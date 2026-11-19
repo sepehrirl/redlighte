@@ -1,0 +1,16 @@
+@import url("https://fonts.googleapis.com/css2?family=Estedad:wght@400;500;600;700;800;900&display=swap");
+
+:root,
+body,
+body *:not(code):not(pre):not(kbd):not(samp):not(pre *):not(code *) {
+  font-family: "Estedad", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+}
+
+pre,
+pre *,
+code,
+code *,
+kbd,
+samp {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace !important;
+}
