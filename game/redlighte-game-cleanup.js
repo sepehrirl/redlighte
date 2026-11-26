@@ -43,7 +43,7 @@
    const card=e.target.closest('[data-library-game]');
    if(!card)return;
    e.preventDefault();e.stopImmediatePropagation();
-   location.href=`/game/${encodeURIComponent(card.dataset.libraryGame)}/`;
+   window.RedlighteGame?.play(card.dataset.libraryGame);
   },true);
   setInterval(sync,60000);
   window.addEventListener('focus',sync);
