@@ -16,12 +16,13 @@ Browser / PWA
 Cloudflare Worker (worker/index.js)
   |-- Core AI, account, auth, chat
   |-- Memory services
+  |-- Per-chat continuity context
   |-- Game API
   |-- Room and live-share services
   |-- Vault API
   |-- Pulse services
   |
-   +--> Cloudflare Workers AI (GLM-4.7 Flash for chat and chat summaries)
+  +--> Cloudflare Workers AI (GLM-4.7 Flash for chat and chat summaries)
   |
   +--> Private application-data repository (account data and personal Memory)
   |
