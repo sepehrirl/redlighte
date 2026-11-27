@@ -1,8 +1,9 @@
 import { getMemory, retrieveMemories, buildMemoryContext, extractAndMergeMemory, addManualMemory, updateManualMemory, deleteMemory, clearMemories, setMemoryEnabled } from './memory.js';
+import { advanceConversationSummary, CONVERSATION_LIMITS } from './conversation-context.js';
 
 const MODEL='@cf/zai-org/glm-4.7-flash';
 const MAX_MESSAGE_LENGTH=12000;
-const MAX_MESSAGES=20;
+const MAX_CONTEXT_MESSAGES=CONVERSATION_LIMITS.maxRecentMessages;
 const PBKDF2_ITERATIONS=100000;
 const DATA_REPO='amirsepehr2020/redlighte-data';
 const SYSTEM_PROMPT=`You are Redlighte AI, the official AI assistant of Redlighte.
@@ -95,9 +96,179 @@ async function handleAccountData(request,env,route='/api/account/data'){const co
 
 async function handleMemory(request,env,path){const cors=corsHeaders(request);if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});const session=await readSession(request,env);if(!session)return json({error:'Unauthorized.'},401,cors);try{if(path==='/api/memory'&&request.method==='GET'){const {data}=await getMemory(env,session.username);return json({enabled:data.enabled,memories:data.memories},200,cors)}if(path==='/api/memory'&&request.method==='POST'){const body=await readJson(request);const memory=await addManualMemory(env,session.username,body);return json({memory},201,cors)}if(path==='/api/memory/settings'&&(request.method==='PUT'||request.method==='POST')){const body=await readJson(request);const data=await setMemoryEnabled(env,session.username,body?.enabled);return json({enabled:data.enabled},200,cors)}if(path==='/api/memory/clear'&&request.method==='DELETE'){const data=await clearMemories(env,session.username);return json({ok:true,enabled:data.enabled,memories:[]},200,cors)}const match=path.match(/^\/api\/memory\/([^/]+)$/);if(match&&request.method==='PUT'){const body=await readJson(request);const memory=await updateManualMemory(env,session.username,match[1],body);if(!memory)return json({error:'Memory not found.'},404,cors);return json({memory},200,cors)}if(match&&request.method==='DELETE'){const ok=await deleteMemory(env,session.username,match[1]);if(!ok)return json({error:'Memory not found.'},404,cors);return json({ok:true},200,cors)}return json({error:'Not found.'},404,cors)}catch(error){console.error('MEMORY_API_ERROR',error);return json({error:error?.message||'Memory service error.'},500,cors)}}
 
-async function handleChat(request,env){const cors=corsHeaders(request),requestId=crypto.randomUUID();if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});if(request.method==='GET')return json({service:'Redlighte AI',status:env.AI?'ready':'not_configured',provider:'cloudflare-workers-ai',model:MODEL,request_id:requestId},200,cors);if(request.method!=='POST')return json({error:'Method not allowed.'},405,{...cors,Allow:'GET,POST,OPTIONS'});if(!env.AI)return json({error:'AI service is not configured.',code:'AI_NOT_CONFIGURED',request_id:requestId},503,cors);let body;try{body=await request.json()}catch{return json({error:'Invalid JSON body.',code:'INVALID_JSON',request_id:requestId},400,cors)}const input=typeof body?.message==='string'?body.message.trim():'';if(!input)return json({error:'Message is required.',code:'MESSAGE_REQUIRED',request_id:requestId},400,cors);if(input.length>MAX_MESSAGE_LENGTH)return json({error:'Message is too long.',code:'MESSAGE_TOO_LONG',request_id:requestId},413,cors);const incoming=Array.isArray(body?.messages)?body.messages:[];const messages=incoming.filter(m=>m&&(m.role==='user'||m.role==='assistant')&&typeof m.content==='string').slice(-MAX_MESSAGES).map(m=>({role:m.role,content:m.content.slice(0,MAX_MESSAGE_LENGTH)}));if(!messages.length||messages[messages.length-1]?.content!==input)messages.push({role:'user',content:input});let session=null;try{session=await readSession(request,env)}catch{}
-let memoryData=null;let selectedMemories=[];if(session){try{const result=await getMemory(env,session.username);memoryData=result.data;if(memoryData.enabled){selectedMemories=retrieveMemories(memoryData,input);selectedMemories.forEach(m=>{const original=memoryData.memories.find(x=>x.id===m.id);if(original)original.lastUsedAt=m.lastUsedAt});}}catch(error){console.error(`[${requestId}] MEMORY_RETRIEVAL_ERROR`,error)}}
-const memoryContext=buildMemoryContext(selectedMemories);const systemMessage=memoryContext?`${SYSTEM_PROMPT}\n\n${memoryContext}`:SYSTEM_PROMPT;try{const result=await env.AI.run(MODEL,{messages:[{role:'system',content:systemMessage},...messages],max_tokens:4096,temperature:.45,chat_template_kwargs:{enable_thinking:false}});const answer=result?.response||result?.result?.response||result?.choices?.[0]?.message?.content||result?.result?.choices?.[0]?.message?.content;if(typeof answer!=='string'||!answer.trim())return json({error:'The AI service returned an empty response.',code:'EMPTY_AI_RESPONSE',request_id:requestId},502,cors);let memoryEvent=null;if(session&&memoryData?.enabled){try{memoryEvent=await extractAndMergeMemory(env,session.username,input,messages,body?.conversation_id||null)}catch(error){console.error(`[${requestId}] MEMORY_SAVE_ERROR`,error)}}const finalMessage=memoryEvent?.memory?.content?`${answer.trim()}\n\n🧠 ${memoryEvent.action==='updated'?'Memory updated':'Saved to Memory'} — ${memoryEvent.memory.content}`:answer;return json({message:finalMessage,model:MODEL,request_id:requestId,memory:memoryEvent?{action:memoryEvent.action,type:memoryEvent.memory.type,id:memoryEvent.memory.id}:null},200,cors)}catch(error){console.error(`[${requestId}] WORKERS_AI_ERROR`,error);return json({error:'AI service error.',code:'WORKERS_AI_ERROR',detail:error?.message||String(error),request_id:requestId},502,cors)}}
+async function handleConversationContext(request,env,path){
+  const cors=corsHeaders(request);
+  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
+  if(request.method!=='DELETE')return json({error:'Method not allowed.'},405,{...cors,Allow:'DELETE,OPTIONS'});
+  const session=await readSession(request,env);
+  if(!session)return json({error:'Unauthorized.'},401,cors);
+  const match=path.match(/^\\/api\\/chat\\/context\\/([a-zA-Z0-9_-]{1,128})$/);
+  if(!match)return json({error:'Invalid conversation ID.'},400,cors);
+  if(!env.CONVERSATIONS)return json({error:'Conversation storage is not configured.',code:'CONVERSATION_STORAGE_UNAVAILABLE'},503,cors);
+  try{
+    const stub=getConversationStub(env,session.username,match[1]);
+    const result=await stub.fetch('https://conversation-context.internal/state',{method:'DELETE'});
+    if(!result.ok)throw new Error('Conversation storage delete failed.');
+    return json({ok:true},200,cors);
+  }catch(error){
+    console.error('CONVERSATION_DELETE_ERROR',error);
+    return json({error:'Could not delete conversation context.',code:'CONVERSATION_DELETE_FAILED'},503,cors);
+  }
+}
+
+function getConversationStub(env,username,conversationId){
+  const id=env.CONVERSATIONS.idFromName(`${String(username).toLowerCase()}:${conversationId}`);
+  return env.CONVERSATIONS.get(id);
+}
+
+async function readConversationState(env,username,conversationId){
+  const stub=getConversationStub(env,username,conversationId);
+  const response=await stub.fetch('https://conversation-context.internal/state');
+  if(!response.ok)throw new Error('Conversation context could not be loaded.');
+  return await response.json();
+}
+
+async function writeConversationState(env,username,conversationId,state){
+  const stub=getConversationStub(env,username,conversationId);
+  const response=await stub.fetch('https://conversation-context.internal/state',{
+    method:'PUT',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(state)
+  });
+  if(!response.ok)throw new Error('Conversation context could not be saved.');
+  return await response.json();
+}
+
+async function handleChat(request,env){
+  const cors=corsHeaders(request),requestId=crypto.randomUUID();
+  if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
+  if(request.method==='GET')return json({service:'Redlighte AI',status:env.AI?'ready':'not_configured',provider:'cloudflare-workers-ai',model:MODEL,request_id:requestId},200,cors);
+  if(request.method!=='POST')return json({error:'Method not allowed.'},405,{...cors,Allow:'GET,POST,OPTIONS'});
+  if(!env.AI)return json({error:'AI service is not configured.',code:'AI_NOT_CONFIGURED',request_id:requestId},503,cors);
+
+  let session=null;
+  try{session=await readSession(request,env)}catch(error){console.error(`[${requestId}] SESSION_READ_ERROR`,error)}
+  if(!session)return json({error:'Authentication required.',code:'UNAUTHORIZED',request_id:requestId},401,cors);
+  if(!env.CONVERSATIONS)return json({error:'Conversation storage is not configured.',code:'CONVERSATION_STORAGE_UNAVAILABLE',request_id:requestId},503,cors);
+
+  let body;
+  try{body=await request.json()}catch{return json({error:'Invalid JSON body.',code:'INVALID_JSON',request_id:requestId},400,cors)}
+  const input=typeof body?.message==='string'?body.message.trim():'';
+  if(!input)return json({error:'Message is required.',code:'MESSAGE_REQUIRED',request_id:requestId},400,cors);
+  if(input.length>MAX_MESSAGE_LENGTH)return json({error:'Message is too long.',code:'MESSAGE_TOO_LONG',request_id:requestId},413,cors);
+  const conversationId=typeof body?.conversation_id==='string'?body.conversation_id.trim():'';
+  if(!/^[a-zA-Z0-9_-]{1,128}$/.test(conversationId))return json({error:'A valid conversation ID is required.',code:'CONVERSATION_ID_REQUIRED',request_id:requestId},400,cors);
+
+  let stored;
+  try{stored=await readConversationState(env,session.username,conversationId)}
+  catch(error){
+    console.error(`[${requestId}] CONVERSATION_LOAD_ERROR`,error);
+    return json({error:'Could not load this conversation. Please try again.',code:'CONVERSATION_LOAD_FAILED',request_id:requestId},503,cors);
+  }
+
+  const incoming=Array.isArray(body?.messages)?body.messages:[];
+  let history=incoming
+    .filter(m=>m&&(m.role==='user'||m.role==='assistant')&&typeof m.content==='string')
+    .map(m=>({role:m.role,content:m.content.slice(0,MAX_MESSAGE_LENGTH)}));
+  let baseIndex=0;
+  if(Number(stored.messageCount)>history.length&&Array.isArray(stored.messages)&&stored.messages.length){
+    history=stored.messages.map(m=>({role:m.role,content:String(m.content||'').slice(0,MAX_MESSAGE_LENGTH)}));
+    baseIndex=Math.max(0,Number(stored.messageCount)-history.length);
+  }
+  if(!history.length||history[history.length-1]?.role!=='user'||history[history.length-1]?.content!==input){
+    history.push({role:'user',content:input});
+  }
+
+  const totalBefore=baseIndex+history.length;
+  let summary=typeof stored.summary==='string'?stored.summary:'';
+  let summarizedThrough=Math.max(0,Number(stored.summarizedThrough)||0);
+  const targetBefore=Math.max(0,totalBefore-MAX_CONTEXT_MESSAGES);
+  try{
+    const advanced=await advanceConversationSummary(env,summary,history,baseIndex,summarizedThrough,targetBefore);
+    summary=advanced.summary;
+    summarizedThrough=advanced.summarizedThrough;
+  }catch(error){console.error(`[${requestId}] CONVERSATION_SUMMARY_PREP_ERROR`,error)}
+
+  const availableStart=Math.max(0,summarizedThrough-baseIndex);
+  const messagesForModel=history.slice(availableStart).slice(-Math.max(MAX_CONTEXT_MESSAGES,CONVERSATION_LIMITS.maxStoredMessages));
+  let memoryData=null;
+  let selectedMemories=[];
+  try{
+    const result=await getMemory(env,session.username);
+    memoryData=result.data;
+    if(memoryData.enabled){
+      selectedMemories=retrieveMemories(memoryData,input);
+      selectedMemories.forEach(m=>{
+        const original=memoryData.memories.find(x=>x.id===m.id);
+        if(original)original.lastUsedAt=m.lastUsedAt;
+      });
+    }
+  }catch(error){console.error(`[${requestId}] MEMORY_RETRIEVAL_ERROR`,error)}
+
+  const memoryContext=buildMemoryContext(selectedMemories);
+  const conversationContext=summary
+    ? `[THIS CHAT'S CONTINUITY SUMMARY]\\n${summary}\\n[END THIS CHAT'S CONTINUITY SUMMARY]\\nUse this as context for this conversation only. Recent messages take precedence if they correct an older detail.`
+    : '';
+  const systemMessage=[SYSTEM_PROMPT,conversationContext,memoryContext].filter(Boolean).join('\\n\\n');
+
+  try{
+    const result=await env.AI.run(MODEL,{
+      messages:[{role:'system',content:systemMessage},...messagesForModel],
+      max_tokens:4096,
+      temperature:.45,
+      chat_template_kwargs:{enable_thinking:false}
+    });
+    const answer=result?.response||result?.result?.response||result?.choices?.[0]?.message?.content||result?.result?.choices?.[0]?.message?.content;
+    if(typeof answer!=='string'||!answer.trim())return json({error:'The AI service returned an empty response.',code:'EMPTY_AI_RESPONSE',request_id:requestId},502,cors);
+
+    let memoryEvent=null;
+    if(memoryData?.enabled){
+      try{memoryEvent=await extractAndMergeMemory(env,session.username,input,messagesForModel,conversationId)}
+      catch(error){console.error(`[${requestId}] MEMORY_SAVE_ERROR`,error)}
+    }
+    const finalMessage=memoryEvent?.memory?.content
+      ? `${answer.trim()}\\n\\n🧠 ${memoryEvent.action==='updated'?'Memory updated':'Saved to Memory'} — ${memoryEvent.memory.content}`
+      : answer.trim();
+
+    const completedMessages=[...history,{role:'assistant',content:finalMessage}];
+    const totalAfter=baseIndex+completedMessages.length;
+    const targetAfter=Math.max(0,totalAfter-MAX_CONTEXT_MESSAGES);
+    try{
+      const advanced=await advanceConversationSummary(env,summary,completedMessages,baseIndex,summarizedThrough,targetAfter);
+      summary=advanced.summary;
+      summarizedThrough=advanced.summarizedThrough;
+    }catch(error){console.error(`[${requestId}] CONVERSATION_SUMMARY_SAVE_ERROR`,error)}
+
+    let retainedMessages=completedMessages.slice(Math.max(0,summarizedThrough-baseIndex));
+    retainedMessages=retainedMessages.slice(-CONVERSATION_LIMITS.maxStoredMessages);
+    let contextSaved=true;
+    try{
+      await writeConversationState(env,session.username,conversationId,{
+        version:1,
+        summary,
+        summarizedThrough,
+        messageCount:totalAfter,
+        messages:retainedMessages,
+        updatedAt:new Date().toISOString()
+      });
+    }catch(error){
+      contextSaved=false;
+      console.error(`[${requestId}] CONVERSATION_CONTEXT_SAVE_ERROR`,error);
+    }
+
+    return json({
+      message:finalMessage,
+      model:MODEL,
+      request_id:requestId,
+      context_saved:contextSaved,
+      conversation:{id:conversationId,message_count:totalAfter,summary_through:summarizedThrough},
+      memory:memoryEvent?{action:memoryEvent.action,type:memoryEvent.memory.type,id:memoryEvent.memory.id}:null
+    },200,cors);
+  }catch(error){
+    console.error(`[${requestId}] WORKERS_AI_ERROR`,error);
+    return json({error:'AI service error.',code:'WORKERS_AI_ERROR',detail:error?.message||String(error),request_id:requestId},502,cors);
+  }
+}
 
 async function githubFile(env,path){const r=await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/${path}?ref=main`,{headers:githubHeaders(env)});if(r.status===404)return null;if(!r.ok)throw new Error(`GitHub GET ${r.status}`);const x=await r.json();const bytes=Uint8Array.from(atob(x.content.replace(/\n/g,'')),c=>c.charCodeAt(0));return{sha:x.sha,content:new TextDecoder().decode(bytes)}}
 async function githubWrite(env,path,data,sha,message){const content=toBase64(JSON.stringify(data,null,2));const r=await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/${path}`,{method:'PUT',headers:{...githubHeaders(env),'Content-Type':'application/json'},body:JSON.stringify({message,content,branch:'main',...(sha?{sha}:{})})});if(!r.ok)throw new Error(`GitHub PUT ${r.status}: ${await r.text()}`)}
