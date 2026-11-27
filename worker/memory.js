@@ -45,8 +45,10 @@ export async function extractAndMergeMemory(env, username, userMessage, recentMe
   }
 
   // If the model fails to format its JSON, explicit durable statements still get a safe fallback.
-  if (!candidate || candidate.remember !== true) candidate = deterministicFallback(input);
-  if (candidate && !candidate.evidence) candidate.evidence = input;
+  if (!candidate || candidate.remember !== true) {
+    candidate = deterministicFallback(input);
+    if (candidate) candidate.evidence = input;
+  }
   if (!candidate?.remember || typeof candidate.content !== 'string') return null;
   const evidence = clean(candidate.evidence);
   if (!evidence || !normalizeText(input).includes(normalizeText(evidence))) return null;

@@ -28,6 +28,17 @@ test('explicit Persian fact saves without an AI model and upgrades schema to v4'
  assert.equal(result.action,'created');assert.equal(saved.version,4);assert.equal(saved.memories.length,1);
  assert.equal(saved.memories[0].key,'preference.favorite_color');assert.equal(saved.memories[0].evidence,'رنگ مورد علاقه‌م سبزه');
 });
+test('AI extraction without exact evidence is rejected',async t=>{
+ const original=globalThis.fetch;let writes=0;
+ t.after(()=>{globalThis.fetch=original});
+ globalThis.fetch=async(url,options={})=>{
+  if(options.method==='PUT'){writes++;return new Response('{}',{status:201})}
+  return new Response('{}',{status:404});
+ };
+ const env={GITHUB_TOKEN:'test',AI:{run:async()=>({response:JSON.stringify({remember:true,key:'preference.theme',type:'preference',content:'User prefers dark mode',confidence:.99,importance:.9})})}};
+ const result=await extractAndMergeMemory(env,'tester','I prefer dark mode for coding tasks.');
+ assert.equal(result,null);assert.equal(writes,0);
+});
 test('correction updates an existing memory rather than duplicating it',async t=>{
  const original=globalThis.fetch;let saved;
  const legacy={version:3,enabled:true,memories:[{id:'old-color',key:'preference.favorite_color',type:'preference',content:'رنگ مورد علاقه کاربر سبز است',confidence:.98,importance:.9,status:'active',source:{},createdAt:'2026-01-01T00:00:00.000Z',updatedAt:'2026-01-01T00:00:00.000Z'}]};
