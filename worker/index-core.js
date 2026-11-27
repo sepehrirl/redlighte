@@ -102,7 +102,7 @@ async function handleConversationContext(request,env,path){
   if(request.method!=='DELETE')return json({error:'Method not allowed.'},405,{...cors,Allow:'DELETE,OPTIONS'});
   const session=await readSession(request,env);
   if(!session)return json({error:'Unauthorized.'},401,cors);
-  const match=path.match(/^\\/api\\/chat\\/context\\/([a-zA-Z0-9_-]{1,128})$/);
+  const match=path.match(/^\/api\/chat\/context\/([a-zA-Z0-9_-]{1,128})$/);
   if(!match)return json({error:'Invalid conversation ID.'},400,cors);
   if(!env.CONVERSATIONS)return json({error:'Conversation storage is not configured.',code:'CONVERSATION_STORAGE_UNAVAILABLE'},503,cors);
   try{
