@@ -1,0 +1,49 @@
+name: Redlighte Worker Validation
+
+on:
+  pull_request:
+    paths:
+      - "worker/**"
+      - "wrangler.jsonc"
+      - ".github/workflows/worker-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+      - "wrangler.jsonc"
+      - ".github/workflows/worker-validation.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  worker-syntax-and-bindings:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check Worker module syntax
+        run: |
+          set -e
+          for file in worker/*.js; do
+            node --input-type=module --check < "$file"
+          done
+      - name: Validate conversation Durable Object binding
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const config = JSON.parse(fs.readFileSync('wrangler.jsonc', 'utf8'));
+          const worker = fs.readFileSync('worker/index.js', 'utf8');
+          const core = fs.readFileSync('worker/index-core.js', 'utf8');
+          const context = fs.readFileSync('worker/conversation-context.js', 'utf8');
+          const binding = config.durable_objects?.bindings?.find(x => x.name === 'CONVERSATIONS');
+          const migration = config.migrations?.find(x => x.new_sqlite_classes?.includes('ConversationContextDurableObject'));
+          if (binding?.class_name !== 'ConversationContextDurableObject') throw new Error('Missing CONVERSATIONS Durable Object binding');
+          if (!migration) throw new Error('Missing ConversationContextDurableObject migration');
+          if (!worker.includes('ConversationContextDurableObject')) throw new Error('Worker entry does not export the conversation Durable Object');
+          if (!core.includes("url.pathname.startsWith('/api/chat/context/')")) throw new Error('Conversation context deletion route is missing');
+          if (!context.includes('advanceConversationSummary')) throw new Error('Conversation summary engine is missing');
+          console.log('Conversation context binding, migration, routing, and summary engine are valid.');
+          NODE
