@@ -30,7 +30,7 @@ The main product is **Redlighte AI**, a conversational assistant served through 
 Current implementation includes:
 
 - 🤖 Cloudflare Workers AI
-- 🧠 `@cf/qwen/qwen3-30b-a3b-fp8`
+- 🧠 `@cf/zai-org/glm-4.7-flash`
 - 💬 Conversation context with up to **20 recent messages**
 - 📝 User messages up to **12,000 characters**
 - ⚡ Up to **4,096 generated tokens** per response
@@ -253,7 +253,7 @@ It supports:
 - Deduplication and updating of existing memories
 - Filtering of sensitive information from memory storage
 
-The memory analyzer uses the same Qwen 3 model family through Cloudflare Workers AI.
+Memory 2.0 uses the active GLM-4.7 Flash model through Cloudflare Workers AI, validates extracted facts against an exact quote from the latest user message, and keeps deterministic extraction for explicit statements. Persian-aware relevance gating prevents unrelated high-importance memories from entering the prompt. Existing v1–v3 records remain readable and are normalized to the unified v4 schema on the next update. The duplicate extraction engine has been removed.
 
 ---
 
@@ -288,7 +288,7 @@ Redlighte is a lightweight static frontend combined with a serverless Cloudflare
                 ▼               ▼
        ┌────────────────┐  ┌──────────────────┐
        │ Cloudflare AI  │  │ GitHub Data Repo │
-       │ Qwen 3         │  │ users / chats    │
+       │ GLM-4.7 Flash  │  │ users / chats    │
        │                │  │ memory / vault   │
        └────────────────┘  │ game / auth data │
                            └──────────────────┘
@@ -331,7 +331,7 @@ The frontend does not directly receive the GitHub credentials used by the Worker
 | Frontend | HTML, CSS, JavaScript |
 | Backend | Cloudflare Workers |
 | AI Runtime | Cloudflare Workers AI |
-| AI Model | Qwen 3 30B A3B FP8 (`@cf/qwen/qwen3-30b-a3b-fp8`) |
+| AI Model | GLM-4.7 Flash (`@cf/zai-org/glm-4.7-flash`) |
 | Authentication | Custom session-based authentication |
 | Password Hashing | PBKDF2 + SHA-256 |
 | Session Signing | HMAC-SHA-256 |
@@ -379,7 +379,7 @@ redlighte/
 │   ├── index-core.js          # Core AI/auth/account/chat logic
 │   ├── google-auth.js         # Google authentication
 │   ├── memory.js              # Memory service
-│   ├── memory-core.js         # Memory storage/retrieval core
+│   ├── memory-store.js        # Memory storage/retrieval core
 │   ├── game-api.js            # Game/social API
 │   ├── room.js                # Room + Durable Objects
 │   ├── live-share.js          # Live-share functionality

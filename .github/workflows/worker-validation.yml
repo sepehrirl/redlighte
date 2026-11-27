@@ -31,6 +31,8 @@ jobs:
           for file in worker/*.js; do
             node --input-type=module --check < "$file"
           done
+      - name: Test Memory 2.0 retrieval and migration compatibility
+        run: node --experimental-default-type=module --test worker/memory.test.mjs
       - name: Validate conversation Durable Object binding
         run: |
           node <<'NODE'

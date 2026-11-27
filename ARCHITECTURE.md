@@ -44,7 +44,7 @@ The documented Worker entry point is `worker/index.js`. Supporting modules inclu
 - `index-core.js`: core AI, account, authentication, and chat behavior.
 - `conversation-context.js`: per-chat continuity summaries and Durable Object storage.
 - `google-auth.js`: Google authentication integration.
-- `memory.js` and `memory-core.js`: memory workflows.
+- `memory.js` and `memory-store.js`: the unified Memory 2.0 extraction, storage, and retrieval pipeline. The duplicate extractor from the retired `memory-core.js` file has been removed; `memory-store.js` now contains only storage and retrieval primitives.
 - `game-api.js`: game and social-game API.
 - `room.js`: room services and Durable Objects.
 - `live-share.js`: live-sharing functionality.
@@ -59,7 +59,7 @@ The authenticated main client sends chat requests to the same-origin `/api/chat`
 
 Each chat has its own rolling continuity summary and recent message window. The Worker summarizes older messages as the conversation grows, then supplies that summary alongside recent messages to Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`). The Durable Object retains the summary, message count, and recent transcript so context can be recovered across sessions and devices.
 
-Account-wide personal Memory remains separate and may be added to the system context independently; it must never replace or merge chat-specific context. Pulse reference data is injected separately and is not stored as a conversation turn. Deleting a chat also deletes its Durable Object context through the authenticated context endpoint.
+Account-wide personal Memory 2.0 remains separate and may be added to the system context independently; it must never replace or merge chat-specific context. Legacy v1–v3 records are normalized into the v4 schema without discarding existing user memories. Extraction uses the active GLM-4.7 Flash model, validates an exact quote from the latest user message, and retains deterministic extraction for explicit statements. Retrieval requires lexical relevance before importance or recency can influence ranking, with Persian-to-English key expansion for legacy records. Pulse reference data is injected separately and is not stored as a conversation turn. Deleting a chat also deletes its Durable Object context through the authenticated context endpoint.
 
 ## 6. Identity, sessions, and data
 

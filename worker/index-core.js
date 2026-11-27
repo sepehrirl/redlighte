@@ -197,11 +197,8 @@ async function handleChat(request,env){
     const result=await getMemory(env,session.username);
     memoryData=result.data;
     if(memoryData.enabled){
-      selectedMemories=retrieveMemories(memoryData,input);
-      selectedMemories.forEach(m=>{
-        const original=memoryData.memories.find(x=>x.id===m.id);
-        if(original)original.lastUsedAt=m.lastUsedAt;
-      });
+      const memoryQuery=[input,...messagesForModel.filter(m=>m.role==='user').slice(-3).map(m=>m.content)].join('\n');
+      selectedMemories=retrieveMemories(memoryData,memoryQuery);
     }
   }catch(error){console.error(`[${requestId}] MEMORY_RETRIEVAL_ERROR`,error)}
 
