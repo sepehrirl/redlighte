@@ -44,17 +44,7 @@ async function gameResult(request,env,me,cors){
  if(won)applyQuestProgress(q,'win',1);
  if(score>=20)applyQuestProgress(q,'score20',1);
  await write(env,a,'Save Redlighte Game result');
- let challenge=null;
- const challengeId=clean(body?.challengeId,80);
- if(challengeId){
-  const c=ensure(a.data).challenges.find(x=>x.id===challengeId);
-  if(c&&c.status==='accepted'&&(c.from===me.username||c.to===me.username)&&c.game===game){
-   c.scores[me.username]=Math.max(Number(c.scores[me.username])||0,score);
-   if(c.scores[c.from]!=null&&c.scores[c.to]!=null)c.status='completed';
-   try{await write(env,a,'Save Game challenge result');challenge={id:c.id,status:c.status}}catch(error){console.error('GAME_CHALLENGE_RESULT_ERROR',error)}
-  }
- }
- return json({ok:true,game,score,won,gameStats:{gamesPlayed:g.gamesPlayed,xp:g.xp,coins:g.coins,wins:g.wins,bestScores:g.bestScores,achievements:g.achievements},quests:QUESTS.map(x=>({...x,progress:q.progress[x.id]||0,claimed:!!q.claimed[x.id]})),challenge},200,cors);
+ return json({ok:true,game,score,won,gameStats:{gamesPlayed:g.gamesPlayed,xp:g.xp,coins:g.coins,wins:g.wins,bestScores:g.bestScores,achievements:g.achievements},quests:QUESTS.map(x=>({...x,progress:q.progress[x.id]||0,claimed:!!q.claimed[x.id]}))},200,cors);
 }
 function applyQuestProgress(q,action,amount){const def=QUESTS.find(x=>x.action===action);if(!def)return;q.progress[def.id]=Math.min(def.target,(Number(q.progress[def.id])||0)+amount)}
 
