@@ -71,7 +71,8 @@ function retrievalScore(memory, queryTokens) {
   const coverage = overlap / queryTokens.size;
   const precision = overlap / Math.max(1, Math.min(tokens.size, queryTokens.size));
   const lexical = Math.min(1, coverage * 0.65 + precision * 0.35);
-  const ageDays = Math.max(0, (Date.now() - Date.parse(memory.updatedAt || memory.createdAt)) / 86400000);
+  const updated = Date.parse(memory.updatedAt || memory.createdAt || '');
+  const ageDays = Number.isFinite(updated) ? Math.max(0, (Date.now() - updated) / 86400000) : 365;
   const recency = 1 / (1 + ageDays / 45);
   return lexical * 0.78 + (Number(memory.importance) || 0) * 0.10 + (Number(memory.confidence) || 0) * 0.08 + recency * 0.04;
 }
