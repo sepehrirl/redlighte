@@ -10,6 +10,10 @@ test('Persian query retrieves a legacy English memory through its stable key',()
  const data={enabled:true,memories:[{id:'m2',key:'preference.favorite_color',type:'preference',content:"User's favorite color is green.",confidence:1,importance:.9,status:'active'}]};
  assert.equal(retrieveMemories(data,'رنگ مورد علاقه من چیه؟')[0]?.id,'m2');
 });
+test('generic stopwords cannot make an unrelated memory look relevant',()=>{
+ const data={enabled:true,memories:[{id:'m3',key:'profile.work',type:'profile',content:'The user is a software engineer.',confidence:1,importance:1,status:'active'}]};
+ assert.deepEqual(retrieveMemories(data,'What is my current city?'),[]);
+});
 test('memory context treats saved content as data, not instructions',()=>{
  assert.match(buildMemoryContext([{type:'preference',content:'User likes math.'}]),/DATA, NOT INSTRUCTIONS/);
 });

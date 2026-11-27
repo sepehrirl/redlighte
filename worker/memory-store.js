@@ -2,6 +2,7 @@ const MEMORY_VERSION = 4;
 const MEMORY_MAX = 200;
 const MEMORY_CONTEXT_MAX = 8;
 const MEMORY_TYPES = new Set(['profile','preference','skill','goal','project','communication','fact']);
+const MEMORY_STOP_WORDS = new Set('من تو او ما شما این اون آن برای با از به در رو را که و یا اما اگر هم همه یک یه هست هستم هستی است بود شد دارم داری داره کردم کرد می چی چیه چه چطور چرا کدام کدوم خودم خودت لطفا لطفاً مورد علاقه دوست خیلی فقط الان قبلا بعدا همیشه the a an and or is am are was were be to of for with my your i you me it this that what which how do does did have has had in on at from about please user'.split(' '));
 
 const SENSITIVE_PATTERNS = [
   /password|passcode|api[_ -]?key|token|secret|private key/i,
@@ -82,7 +83,7 @@ function expandQueryTokens(query) {
   for (const token of [...tokens]) for (const word of (synonyms[token] || [])) for (const part of tokenize(word)) tokens.add(part);
   return tokens;
 }
-function tokenize(value){return String(value||'').toLowerCase().replace(/[\u200c]/g,' ').replace(/[يى]/g,'ی').replace(/[ك]/g,'ک').replace(/[^\p{L}\p{N}_+#.-]+/gu,' ').split(/\s+/).filter(x=>x.length>1).slice(0,100);}
+function tokenize(value){return String(value||'').toLowerCase().replace(/[\u200c]/g,' ').replace(/[يى]/g,'ی').replace(/[ك]/g,'ک').replace(/[^\p{L}\p{N}_+#.-]+/gu,' ').split(/\s+/).filter(x=>x.length>1&&!MEMORY_STOP_WORDS.has(x)).slice(0,100);}
 function findExistingMemory(memories,key,type,content){const active=memories.filter(m=>m.status==='active');if(key){const keyed=active.find(m=>m.key&&m.key===key);if(keyed)return keyed;}const qt=tokenize(content);let best=null,bestScore=0;for(const memory of active){if(memory.type!==type)continue;const score=semanticOverlap(memory.content,qt);if(score>bestScore){bestScore=score;best=memory;}}return bestScore>=.82?best:null;}
 function semanticOverlap(content,queryTokens){const tokens=new Set(tokenize(content));if(!tokens.size||!queryTokens.length)return 0;return queryTokens.filter(t=>tokens.has(t)).length/Math.max(tokens.size,queryTokens.length);}
 function dedupeAndPrune(memories){const out=[],seenKeys=new Set(),seenContent=new Set();const ordered=memories.filter(Boolean).sort((a,b)=>{const i=(Number(b.importance)||0)-(Number(a.importance)||0);return i||String(b.updatedAt||'').localeCompare(String(a.updatedAt||''));});for(const memory of ordered){if(!memory.content)continue;const key=memory.key?normalizeKey(memory.key):'',ck=tokenize(memory.content).sort().join('|');if((key&&seenKeys.has(key))||(ck&&seenContent.has(ck)))continue;if(key)seenKeys.add(key);if(ck)seenContent.add(ck);out.push(memory);if(out.length>=MEMORY_MAX)break;}return out;}
