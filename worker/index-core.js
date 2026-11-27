@@ -156,8 +156,10 @@ async function handleChat(request,env){
   const input=typeof body?.message==='string'?body.message.trim():'';
   if(!input)return json({error:'Message is required.',code:'MESSAGE_REQUIRED',request_id:requestId},400,cors);
   if(input.length>MAX_MESSAGE_LENGTH)return json({error:'Message is too long.',code:'MESSAGE_TOO_LONG',request_id:requestId},413,cors);
-  const conversationId=typeof body?.conversation_id==='string'?body.conversation_id.trim():'';
+  const suppliedConversationId=typeof body?.conversation_id==='string'?body.conversation_id.trim():'';
+  const conversationId=suppliedConversationId||crypto.randomUUID();
   if(!/^[a-zA-Z0-9_-]{1,128}$/.test(conversationId))return json({error:'A valid conversation ID is required.',code:'CONVERSATION_ID_REQUIRED',request_id:requestId},400,cors);
+  if(!suppliedConversationId)console.warn(`[${requestId}] LEGACY_CHAT_REQUEST_MISSING_CONVERSATION_ID`);
 
   let stored;
   try{stored=await readConversationState(env,session.id,conversationId)}
