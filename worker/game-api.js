@@ -9,17 +9,60 @@ if(url.pathname==='/api/game/friends/remove'&&request.method==='POST')return rem
 if(url.pathname==='/api/game/challenges'&&request.method==='POST')return challenge(request,env,me,cors);
 if(url.pathname==='/api/game/challenges/respond'&&request.method==='POST')return respond(request,env,me,cors);
 if(url.pathname==='/api/game/challenges/score'&&request.method==='POST')return challengeScore(request,env,me,cors);
-if(url.pathname==='/api/game/quests/progress'&&request.method==='POST')return questProgress(request,env,me,cors);
+if(url.pathname==='/api/game/result'&&request.method==='POST')return gameResult(request,env,me,cors);
 if(url.pathname==='/api/game/quests/claim'&&request.method==='POST')return questClaim(request,env,me,cors);
 return json({error:'Not found.'},404,cors)}catch(e){console.error('GAME_API_ERROR',e);return json({error:'Game service error.'},500,cors)}}
 async function social(env,me,cors){const f=await account(env,me.username);if(!f)return json({error:'Account data not found.'},404,cors);const s=ensure(f.data),q=questState(f.data),day=today();const games=[{id:'redrush',name:'Red Rush',tag:'ARCADE',text:'15 seconds. Beat your record.'},{id:'redlight',name:'Redlight',tag:'REACTION',text:'React only on red.'},{id:'grid',name:'Grid',tag:'PUZZLE',text:'Find the glowing tile.'}];return json({user:me,friends:s.friends,incomingRequests:s.incomingRequests,outgoingRequests:s.outgoingRequests,challenges:s.challenges,events:[{id:'red-week',title:'Red Week',description:'Play Originals and earn bonus XP.',active:true},{id:'rush-hour',title:'Rush Hour',description:'Beat 20 in Red Rush.',active:true}],quests:QUESTS.map(x=>({...x,progress:q.progress[x.id]||0,claimed:!!q.claimed[x.id]})),gameOfDay:games[Math.floor(Date.now()/86400000)%games.length],day},200,cors)}
 async function leaderboard(env,me,cors){const r=await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/users?ref=main`,{headers:gh(env)});if(!r.ok)return json({players:[],me:me.username},200,cors);const entries=await r.json(),users=[];for(const item of Array.isArray(entries)?entries:[]){if(item.type!=='dir')continue;try{const f=await account(env,item.name);const g=f?.data?.settings?.game||{};users.push({username:f.data.user.username,name:f.data.user.name,level:Math.floor((Number(g.xp)||0)/100)+1,xp:Number(g.xp)||0,wins:Number(g.wins)||0})}catch{}}users.sort((a,b)=>b.xp-a.xp||b.wins-a.wins);return json({players:users.slice(0,20),me:me.username},200,cors)}
-async function questProgress(request,env,me,cors){const b=await request.json(),action=clean(b.action,20),amount=Math.max(0,Math.min(10,Number(b.amount)||1)),def=QUESTS.find(x=>x.action===action);if(!def)return json({error:'Invalid quest action.'},400,cors);const a=await account(env,me.username);if(!a)return json({error:'Account not found.'},404,cors);const q=questState(a.data);q.progress[def.id]=Math.min(def.target,(q.progress[def.id]||0)+amount);await write(env,a,'Update Game quest progress');return json({ok:true,quest:{...def,progress:q.progress[def.id],claimed:!!q.claimed[def.id]}},200,cors)}
+const GAME_IDS=new Set(['redrush','redlight','grid','red-orbit','memory','red-break','red-dash','2048']);
+const WIN_THRESHOLDS={'redrush':15,'redlight':5,'grid':8,'red-orbit':15,'memory':8,'red-break':20,'red-dash':250,'2048':2048};
+async function gameResult(request,env,me,cors){
+ const body=await request.json().catch(()=>null),game=clean(body?.game,24),runId=clean(body?.runId,80);
+ const raw=Number(body?.score);
+ if(!GAME_IDS.has(game)||!runId||!Number.isFinite(raw)||raw<0)return json({error:'Invalid game result.'},400,cors);
+ const score=Math.min(100000,Math.floor(raw)),a=await account(env,me.username);
+ if(!a)return json({error:'Account not found.'},404,cors);
+ a.data.settings=a.data.settings||{};a.data.settings.game=a.data.settings.game||{};
+ const g=a.data.settings.game;
+ if(!Array.isArray(g.recentRuns))g.recentRuns=[];
+ if(g.recentRuns.includes(runId))return json({error:'This run was already submitted.'},409,cors);
+ const won=score>=(WIN_THRESHOLDS[game]||Number.MAX_SAFE_INTEGER);
+ g.recentRuns.push(runId);g.recentRuns=g.recentRuns.slice(-100);
+ g.gamesPlayed=Math.max(0,Number(g.gamesPlayed)||0)+1;
+ g.xp=Math.max(0,Number(g.xp)||0)+10+Math.min(30,score)+(won?20:0);
+ g.coins=Math.max(0,Number(g.coins)||0)+(won?15:5);
+ g.wins=Math.max(0,Number(g.wins)||0)+(won?1:0);
+ if(!Array.isArray(g.playedOriginals))g.playedOriginals=[];
+ if(!g.playedOriginals.includes(game))g.playedOriginals.push(game);
+ if(!g.bestScores||typeof g.bestScores!=='object')g.bestScores={};
+ g.bestScores[game]=Math.max(Number(g.bestScores[game])||0,score);
+ if(!Array.isArray(g.achievements))g.achievements=[];
+ if(g.gamesPlayed===1&&!g.achievements.includes('First Game'))g.achievements.push('First Game');
+ if(won&&!g.achievements.includes('First Win'))g.achievements.push('First Win');
+ const q=questState(a.data);
+ applyQuestProgress(q,'play',1);
+ if(won)applyQuestProgress(q,'win',1);
+ if(score>=20)applyQuestProgress(q,'score20',1);
+ await write(env,a,'Save Redlighte Game result');
+ let challenge=null;
+ const challengeId=clean(body?.challengeId,80);
+ if(challengeId){
+  const c=ensure(a.data).challenges.find(x=>x.id===challengeId);
+  if(c&&c.status==='accepted'&&(c.from===me.username||c.to===me.username)&&c.game===game){
+   c.scores[me.username]=Math.max(Number(c.scores[me.username])||0,score);
+   if(c.scores[c.from]!=null&&c.scores[c.to]!=null)c.status='completed';
+   try{await write(env,a,'Save Game challenge result');challenge={id:c.id,status:c.status}}catch(error){console.error('GAME_CHALLENGE_RESULT_ERROR',error)}
+  }
+ }
+ return json({ok:true,game,score,won,gameStats:{gamesPlayed:g.gamesPlayed,xp:g.xp,coins:g.coins,wins:g.wins,bestScores:g.bestScores,achievements:g.achievements},quests:QUESTS.map(x=>({...x,progress:q.progress[x.id]||0,claimed:!!q.claimed[x.id]})),challenge},200,cors);
+}
+function applyQuestProgress(q,action,amount){const def=QUESTS.find(x=>x.action===action);if(!def)return;q.progress[def.id]=Math.min(def.target,(Number(q.progress[def.id])||0)+amount)}
+
 async function questClaim(request,env,me,cors){const b=await request.json(),id=clean(b.id,30),def=QUESTS.find(x=>x.id===id);if(!def)return json({error:'Quest not found.'},404,cors);const a=await account(env,me.username);if(!a)return json({error:'Account not found.'},404,cors);const q=questState(a.data),progress=q.progress[id]||0;if(progress<def.target)return json({error:'Quest is not complete yet.'},400,cors);if(q.claimed[id])return json({error:'Quest reward already claimed.'},409,cors);q.claimed[id]=true;a.data.settings=a.data.settings||{};a.data.settings.game=a.data.settings.game||{};const g=a.data.settings.game;g.xp=Math.max(0,Number(g.xp)||0)+def.reward;g.coins=Math.max(0,Number(g.coins)||0);if(!Array.isArray(g.achievements))g.achievements=[];if(!g.achievements.includes('Quest Hunter'))g.achievements.push('Quest Hunter');await write(env,a,'Claim Redlighte Game quest reward');return json({ok:true,reward:def.reward,quest:{...def,progress,claimed:true},game:{xp:g.xp,coins:g.coins,achievements:g.achievements}},200,cors)}
 async function addFriend(request,env,me,cors){const b=await request.json(),u=clean(b.username,32).toLowerCase();if(!valid(u)||u===me.username)return json({error:'Invalid username.'},400,cors);const t=await account(env,u);if(!t)return json({error:'Account not found.'},404,cors);const o=await account(env,me.username),s=ensure(o.data),ts=ensure(t.data);if(s.friends.some(x=>x.username===u))return json({error:'Already friends.'},409,cors);if(!s.outgoingRequests.some(x=>x.username===u)){s.outgoingRequests.push({username:u,name:t.data.user.name});if(!ts.incomingRequests.some(x=>x.username===me.username))ts.incomingRequests.push({username:me.username,name:me.name});await write(env,o,'Send Game friend request');await write(env,t,'Receive Game friend request')}return json({ok:true},200,cors)}
 async function acceptFriend(request,env,me,cors){const b=await request.json(),u=clean(b.username,32).toLowerCase(),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data),t=await account(env,u);if(!t)return json({error:'Account not found.'},404,cors);const ts=ensure(t.data);if(!s.incomingRequests.some(x=>x.username===u))return json({error:'Request not found.'},404,cors);s.incomingRequests=s.incomingRequests.filter(x=>x.username!==u);if(!s.friends.some(x=>x.username===u))s.friends.push({username:u,name:t.data.user.name});ts.outgoingRequests=ts.outgoingRequests.filter(x=>x.username!==me.username);if(!ts.friends.some(x=>x.username===me.username))ts.friends.push({username:me.username,name:me.name});await write(env,o,'Accept Game friend request');await write(env,t,'Friend accepted');return json({ok:true},200,cors)}
 async function removeFriend(request,env,me,cors){const b=await request.json(),u=clean(b.username,32).toLowerCase(),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data);s.friends=s.friends.filter(x=>x.username!==u);await write(env,o,'Remove Game friend');const t=await account(env,u);if(t){const ts=ensure(t.data);ts.friends=ts.friends.filter(x=>x.username!==me.username);await write(env,t,'Friend removed')}return json({ok:true},200,cors)}
-async function challenge(request,env,me,cors){const b=await request.json(),u=clean(b.username,32).toLowerCase(),game=clean(b.game,20),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data),t=await account(env,u);if(!t||!s.friends.some(x=>x.username===u))return json({error:'You can only challenge a friend.'},403,cors);if(!['redrush','redlight','grid'].includes(game))return json({error:'Invalid game.'},400,cors);const c={id:crypto.randomUUID(),game,from:me.username,fromName:me.name,to:u,status:'pending',createdAt:new Date().toISOString(),scores:{}};s.challenges.push(c);const ts=ensure(t.data);ts.challenges.push({...c});await write(env,o,'Create Game challenge');await write(env,t,'Receive Game challenge');return json({challenge:c},201,cors)}
+async function challenge(request,env,me,cors){const b=await request.json(),u=clean(b.username,32).toLowerCase(),game=clean(b.game,20),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data),t=await account(env,u);if(!t||!s.friends.some(x=>x.username===u))return json({error:'You can only challenge a friend.'},403,cors);if(!GAME_IDS.has(game))return json({error:'Invalid game.'},400,cors);const c={id:crypto.randomUUID(),game,from:me.username,fromName:me.name,to:u,status:'pending',createdAt:new Date().toISOString(),scores:{}};s.challenges.push(c);const ts=ensure(t.data);ts.challenges.push({...c});await write(env,o,'Create Game challenge');await write(env,t,'Receive Game challenge');return json({challenge:c},201,cors)}
 async function respond(request,env,me,cors){const b=await request.json(),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data),c=s.challenges.find(x=>x.id===clean(b.id,80));if(!c||c.to!==me.username)return json({error:'Challenge not found.'},404,cors);c.status=b.accept===true?'accepted':'declined';await write(env,o,'Respond to Game challenge');const t=await account(env,c.from);if(t){const ts=ensure(t.data),m=ts.challenges.find(x=>x.id===c.id);if(m)m.status=c.status;await write(env,t,'Sync Game challenge response')}return json({ok:true,status:c.status},200,cors)}
 async function challengeScore(request,env,me,cors){const b=await request.json(),id=clean(b.id,80),score=Math.max(0,Math.min(100000,Number(b.score)||0)),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data),c=s.challenges.find(x=>x.id===id);if(!c||c.status!=='accepted'||(c.from!==me.username&&c.to!==me.username))return json({error:'Active challenge not found.'},404,cors);c.scores[me.username]=Math.max(Number(c.scores[me.username]||0),score);if(c.scores[c.from]!=null&&c.scores[c.to]!=null)c.status='completed';await write(env,o,'Submit Game challenge score');const other=c.from===me.username?c.to:c.from,t=await account(env,other);if(t){const ts=ensure(t.data),m=ts.challenges.find(x=>x.id===id);if(m){m.scores[me.username]=c.scores[me.username];m.status=c.status}await write(env,t,'Sync Game challenge score')}return json({ok:true,score,status:c.status},200,cors)}
 function ensure(d){d.settings=d.settings||{};const s=d.settings.gameSocial=d.settings.gameSocial||{};for(const k of ['friends','incomingRequests','outgoingRequests','challenges'])if(!Array.isArray(s[k]))s[k]=[];return s}
