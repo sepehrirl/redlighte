@@ -139,3 +139,8 @@ html[dir="rtl"] .typing:before{content:"ردلایت در حال فکر کردن
 @media(prefers-reduced-motion:reduce){
   .hero-mark:after{animation:none!important}
 }
+
+
+/* Theme-aware inline emphasis for AI markdown bold markers */
+.message-body .message-emphasis{display:inline;padding:.035em .3em .09em;margin:0 .045em;border:1px solid color-mix(in srgb,var(--red) 30%,transparent);border-radius:.42em;background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red2);font-weight:700;line-height:1.55;box-decoration-break:clone;-webkit-box-decoration-break:clone;box-shadow:inset 0 1px 0 rgba(255,255,255,.055),0 1px 7px color-mix(in srgb,var(--red) 10%,transparent);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+html.light .message-body .message-emphasis{background:color-mix(in srgb,var(--red) 12%,white);border-color:color-mix(in srgb,var(--red) 28%,transparent);box-shadow:0 1px 5px color-mix(in srgb,var(--red) 8%,transparent)}
