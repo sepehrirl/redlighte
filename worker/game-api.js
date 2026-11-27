@@ -2,6 +2,8 @@ const DATA_REPO='amirsepehr2020/redlighte-data';
 const QUESTS=[{id:'play3',title:'Play 3 Games',target:3,reward:30,action:'play'},{id:'win1',title:'Claim a Win',target:1,reward:50,action:'win'},{id:'score20',title:'Beat 20',target:1,reward:40,action:'score20'}];
 export async function handleGameApi(request,env,url){const cors=corsHeaders(request);if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});const me=await readSession(request,env);if(!me)return json({error:'Unauthorized.'},401,cors);try{
 if(url.pathname==='/api/game/social'&&request.method==='GET')return social(env,me,cors);
+if(url.pathname==='/api/game/social/posts'&&request.method==='POST')return createPost(request,env,me,cors);
+if(url.pathname==='/api/game/social/posts/like'&&request.method==='POST')return likePost(request,env,me,cors);
 if(url.pathname==='/api/game/leaderboard'&&request.method==='GET')return leaderboard(env,me,cors);
 if(url.pathname==='/api/game/friends'&&request.method==='POST')return addFriend(request,env,me,cors);
 if(url.pathname==='/api/game/friends/accept'&&request.method==='POST')return acceptFriend(request,env,me,cors);
@@ -12,7 +14,33 @@ if(url.pathname==='/api/game/challenges/score'&&request.method==='POST')return c
 if(url.pathname==='/api/game/result'&&request.method==='POST')return gameResult(request,env,me,cors);
 if(url.pathname==='/api/game/quests/claim'&&request.method==='POST')return questClaim(request,env,me,cors);
 return json({error:'Not found.'},404,cors)}catch(e){console.error('GAME_API_ERROR',e);return json({error:'Game service error.'},500,cors)}}
-async function social(env,me,cors){const f=await account(env,me.username);if(!f)return json({error:'Account data not found.'},404,cors);const s=ensure(f.data),q=questState(f.data),day=today();const games=[{id:'redrush',name:'Red Rush',tag:'ARCADE',text:'15 seconds. Beat your record.'},{id:'redlight',name:'Redlight',tag:'REACTION',text:'React only on red.'},{id:'grid',name:'Grid',tag:'PUZZLE',text:'Find the glowing tile.'}];return json({user:me,friends:s.friends,incomingRequests:s.incomingRequests,outgoingRequests:s.outgoingRequests,challenges:s.challenges,events:[{id:'red-week',title:'Red Week',description:'Play Originals and earn bonus XP.',active:true},{id:'rush-hour',title:'Rush Hour',description:'Beat 20 in Red Rush.',active:true}],quests:QUESTS.map(x=>({...x,progress:q.progress[x.id]||0,claimed:!!q.claimed[x.id]})),gameOfDay:games[Math.floor(Date.now()/86400000)%games.length],day},200,cors)}
+async function social(env,me,cors){
+ const f=await account(env,me.username);if(!f)return json({error:'Account data not found.'},404,cors);
+ const state=ensure(f.data),q=questState(f.data),day=today();
+ const games=[{id:'redrush',name:'Red Rush',tag:'ARCADE',text:'15 seconds. Beat your record.'},{id:'redlight',name:'Redlight',tag:'REACTION',text:'React only on red.'},{id:'grid',name:'Grid',tag:'PUZZLE',text:'Find the glowing tile.'},{id:'red-orbit',name:'Red Orbit',tag:'ARCADE',text:'Chase the moving pulse around the orbit.'},{id:'memory',name:'Memory',tag:'MEMORY',text:'Remember the sequence and repeat it.'},{id:'red-break',name:'Red Break',tag:'ARCADE',text:'Clear the red field and build a combo.'},{id:'red-dash',name:'Red Dash',tag:'REACTION',text:'Catch the red pulse and build your combo.'},{id:'2048',name:'2048',tag:'PUZZLE',text:'Merge matching tiles and chase 2048.'}];
+ const authors=[{username:me.username,name:me.name},...state.friends.slice(0,30)],posts=[];
+ for(const author of authors){try{const source=author.username===me.username?f:await account(env,author.username);const arr=source?.data?.settings?.gameSocial?.posts;if(!Array.isArray(arr))continue;for(const post of arr.slice(-30))posts.push({...post,username:author.username,name:author.name||source.data.user?.name||author.username,likes:Array.isArray(post.likes)?post.likes.length:0,likedByMe:Array.isArray(post.likes)&&post.likes.includes(me.username)})}catch{}}
+ posts.sort((x,y)=>String(y.createdAt||'').localeCompare(String(x.createdAt||'')));
+ return json({user:me,friends:state.friends,incomingRequests:state.incomingRequests,outgoingRequests:state.outgoingRequests,challenges:state.challenges,posts:posts.slice(0,40),events:[{id:'red-week',title:'Red Week',description:'Play Originals and earn bonus XP.',active:true},{id:'rush-hour',title:'Rush Hour',description:'Beat 20 in Red Rush.',active:true}],quests:QUESTS.map(x=>({...x,progress:q.progress[x.id]||0,claimed:!!q.claimed[x.id]})),gameOfDay:games[Math.floor(Date.now()/86400000)%games.length],day},200,cors)
+}
+async function createPost(request,env,me,cors){
+ const body=await request.json().catch(()=>null),textValue=clean(body?.text,280);
+ if(!textValue)return json({error:'Write something before posting.'},400,cors);
+ const a=await account(env,me.username);if(!a)return json({error:'Account not found.'},404,cors);
+ const state=ensure(a.data),post={id:crypto.randomUUID(),username:me.username,name:me.name,text:textValue,createdAt:new Date().toISOString(),likes:[]};
+ state.posts.push(post);state.posts=state.posts.slice(-100);await write(env,a,'Create Game community post');
+ return json({ok:true,post:{...post,likes:0}},201,cors)
+}
+async function likePost(request,env,me,cors){
+ const body=await request.json().catch(()=>null),postId=clean(body?.postId,80),owner=clean(body?.username,32).toLowerCase();
+ if(!postId||!valid(owner))return json({error:'Invalid post.'},400,cors);
+ const a=await account(env,owner);if(!a)return json({error:'Post owner not found.'},404,cors);
+ const state=ensure(a.data),post=state.posts.find(x=>x.id===postId);if(!post)return json({error:'Post not found.'},404,cors);
+ if(!Array.isArray(post.likes))post.likes=[];
+ const index=post.likes.indexOf(me.username);if(index>=0)post.likes.splice(index,1);else post.likes.push(me.username);
+ await write(env,a,'Update Game community post reaction');
+ return json({ok:true,likes:post.likes.length,liked:index<0},200,cors)
+}
 async function leaderboard(env,me,cors){const r=await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/users?ref=main`,{headers:gh(env)});if(!r.ok)return json({players:[],me:me.username},200,cors);const entries=await r.json(),users=[];for(const item of Array.isArray(entries)?entries:[]){if(item.type!=='dir')continue;try{const f=await account(env,item.name);const g=f?.data?.settings?.game||{};users.push({username:f.data.user.username,name:f.data.user.name,level:Math.floor((Number(g.xp)||0)/100)+1,xp:Number(g.xp)||0,wins:Number(g.wins)||0})}catch{}}users.sort((a,b)=>b.xp-a.xp||b.wins-a.wins);return json({players:users.slice(0,20),me:me.username},200,cors)}
 const GAME_IDS=new Set(['redrush','redlight','grid','red-orbit','memory','red-break','red-dash','2048']);
 const WIN_THRESHOLDS={'redrush':15,'redlight':5,'grid':8,'red-orbit':15,'memory':8,'red-break':20,'red-dash':250,'2048':2048};
@@ -27,6 +55,8 @@ async function gameResult(request,env,me,cors){
  if(!Array.isArray(g.recentRuns))g.recentRuns=[];
  if(g.recentRuns.includes(runId))return json({error:'This run was already submitted.'},409,cors);
  const won=score>=(WIN_THRESHOLDS[game]||Number.MAX_SAFE_INTEGER);
+ const day=today(),yesterday=new Date(Date.now()-86400000).toISOString().slice(0,10);
+ if(g.lastPlayedDay!==day){g.streak=g.lastPlayedDay===yesterday?(Math.max(0,Number(g.streak)||0)+1):1;g.lastPlayedDay=day}
  g.recentRuns.push(runId);g.recentRuns=g.recentRuns.slice(-100);
  g.gamesPlayed=Math.max(0,Number(g.gamesPlayed)||0)+1;
  g.xp=Math.max(0,Number(g.xp)||0)+10+Math.min(30,score)+(won?20:0);
@@ -39,12 +69,13 @@ async function gameResult(request,env,me,cors){
  if(!Array.isArray(g.achievements))g.achievements=[];
  if(g.gamesPlayed===1&&!g.achievements.includes('First Game'))g.achievements.push('First Game');
  if(won&&!g.achievements.includes('First Win'))g.achievements.push('First Win');
+ const level=Math.floor(g.xp/100)+1;if(level>=5&&!g.achievements.includes('Level 5'))g.achievements.push('Level 5');if(level>=10&&!g.achievements.includes('Legend'))g.achievements.push('Legend');
  const q=questState(a.data);
  applyQuestProgress(q,'play',1);
  if(won)applyQuestProgress(q,'win',1);
  if(score>=20)applyQuestProgress(q,'score20',1);
  await write(env,a,'Save Redlighte Game result');
- return json({ok:true,game,score,won,gameStats:{gamesPlayed:g.gamesPlayed,xp:g.xp,coins:g.coins,wins:g.wins,bestScores:g.bestScores,achievements:g.achievements},quests:QUESTS.map(x=>({...x,progress:q.progress[x.id]||0,claimed:!!q.claimed[x.id]}))},200,cors);
+ return json({ok:true,game,score,won,gameStats:{gamesPlayed:g.gamesPlayed,xp:g.xp,coins:g.coins,wins:g.wins,streak:g.streak,bestScores:g.bestScores,achievements:g.achievements},quests:QUESTS.map(x=>({...x,progress:q.progress[x.id]||0,claimed:!!q.claimed[x.id]}))},200,cors);
 }
 function applyQuestProgress(q,action,amount){const def=QUESTS.find(x=>x.action===action);if(!def)return;q.progress[def.id]=Math.min(def.target,(Number(q.progress[def.id])||0)+amount)}
 
@@ -55,7 +86,7 @@ async function removeFriend(request,env,me,cors){const b=await request.json(),u=
 async function challenge(request,env,me,cors){const b=await request.json(),u=clean(b.username,32).toLowerCase(),game=clean(b.game,20),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data),t=await account(env,u);if(!t||!s.friends.some(x=>x.username===u))return json({error:'You can only challenge a friend.'},403,cors);if(!GAME_IDS.has(game))return json({error:'Invalid game.'},400,cors);const c={id:crypto.randomUUID(),game,from:me.username,fromName:me.name,to:u,status:'pending',createdAt:new Date().toISOString(),scores:{}};s.challenges.push(c);const ts=ensure(t.data);ts.challenges.push({...c});await write(env,o,'Create Game challenge');await write(env,t,'Receive Game challenge');return json({challenge:c},201,cors)}
 async function respond(request,env,me,cors){const b=await request.json(),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data),c=s.challenges.find(x=>x.id===clean(b.id,80));if(!c||c.to!==me.username)return json({error:'Challenge not found.'},404,cors);c.status=b.accept===true?'accepted':'declined';await write(env,o,'Respond to Game challenge');const t=await account(env,c.from);if(t){const ts=ensure(t.data),m=ts.challenges.find(x=>x.id===c.id);if(m)m.status=c.status;await write(env,t,'Sync Game challenge response')}return json({ok:true,status:c.status},200,cors)}
 async function challengeScore(request,env,me,cors){const b=await request.json(),id=clean(b.id,80),score=Math.max(0,Math.min(100000,Number(b.score)||0)),o=await account(env,me.username);if(!o)return json({error:'Account not found.'},404,cors);const s=ensure(o.data),c=s.challenges.find(x=>x.id===id);if(!c||c.status!=='accepted'||(c.from!==me.username&&c.to!==me.username))return json({error:'Active challenge not found.'},404,cors);c.scores[me.username]=Math.max(Number(c.scores[me.username]||0),score);if(c.scores[c.from]!=null&&c.scores[c.to]!=null)c.status='completed';await write(env,o,'Submit Game challenge score');const other=c.from===me.username?c.to:c.from,t=await account(env,other);if(t){const ts=ensure(t.data),m=ts.challenges.find(x=>x.id===id);if(m){m.scores[me.username]=c.scores[me.username];m.status=c.status}await write(env,t,'Sync Game challenge score')}return json({ok:true,score,status:c.status},200,cors)}
-function ensure(d){d.settings=d.settings||{};const s=d.settings.gameSocial=d.settings.gameSocial||{};for(const k of ['friends','incomingRequests','outgoingRequests','challenges'])if(!Array.isArray(s[k]))s[k]=[];return s}
+function ensure(d){d.settings=d.settings||{};const s=d.settings.gameSocial=d.settings.gameSocial||{};for(const k of ['friends','incomingRequests','outgoingRequests','challenges','posts'])if(!Array.isArray(s[k]))s[k]=[];return s}
 function questState(d){d.settings=d.settings||{};const q=d.settings.gameQuests=d.settings.gameQuests||{},day=today();if(q.day!==day){q.day=day;q.progress={};q.claimed={}}q.progress=q.progress&&typeof q.progress==='object'?q.progress:{};q.claimed=q.claimed&&typeof q.claimed==='object'?q.claimed:{};return q}
 function today(){return new Date().toISOString().slice(0,10)}
 async function account(env,u){if(!u)return null;const path=`users/${u}/data.json`,r=await fetch(`https://api.github.com/repos/${DATA_REPO}/contents/${path}?ref=main`,{headers:gh(env)});if(r.status===404)return null;if(!r.ok)throw Error('GitHub GET');const x=await r.json(),bytes=Uint8Array.from(atob(x.content.replace(/\n/g,'')),c=>c.charCodeAt(0));return{path,sha:x.sha,data:JSON.parse(new TextDecoder().decode(bytes))}}
