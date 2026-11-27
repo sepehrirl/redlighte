@@ -232,13 +232,6 @@ async function handleChat(request,env){
 
     const completedMessages=[...history,{role:'assistant',content:finalMessage}];
     const totalAfter=baseIndex+completedMessages.length;
-    const targetAfter=Math.max(0,totalAfter-MAX_CONTEXT_MESSAGES);
-    try{
-      const advanced=await advanceConversationSummary(env,summary,completedMessages,baseIndex,summarizedThrough,targetAfter);
-      summary=advanced.summary;
-      summarizedThrough=advanced.summarizedThrough;
-    }catch(error){console.error(`[${requestId}] CONVERSATION_SUMMARY_SAVE_ERROR`,error)}
-
     let retainedMessages=completedMessages.slice(Math.max(0,summarizedThrough-baseIndex));
     retainedMessages=retainedMessages.slice(-CONVERSATION_LIMITS.maxStoredMessages);
     let contextSaved=true;
