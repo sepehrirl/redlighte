@@ -510,3 +510,20 @@ What started as an idea is growing into a real AI platform and ecosystem — one
 <p align="center">
   <strong>Redlighte — Light up your conversations.</strong>
 </p>
+
+
+## 📚 Project documentation
+
+The repository includes maintained documentation for the Redlighte ecosystem:
+
+| Document | Scope |
+|---|---|
+| [Ecosystem map](ECOSYSTEM.md) | Brand hierarchy, products, and product boundaries |
+| [Architecture](ARCHITECTURE.md) | Frontend, Worker, AI, real-time services, and integrations |
+| [Security](SECURITY.md) | Security expectations and vulnerability reporting |
+| [Data governance](DATA_GOVERNANCE.md) | Data classification, ownership, retention, and privacy principles |
+| [Operations](OPERATIONS.md) | Deployment, configuration, monitoring, and recovery guidance |
+| [Contributing](CONTRIBUTING.md) | Safe contribution and change workflow |
+| [Architecture decisions](DECISIONS.md) | Important technical decisions and their rationale |
+
+These documents describe the repository and currently documented system behavior. Verify live Cloudflare bindings, secrets, production configuration, and external data-repository policies before operational changes.
