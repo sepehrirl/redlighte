@@ -41,7 +41,8 @@ The browser should call same-origin application endpoints. Secrets and privilege
 
 The documented Worker entry point is `worker/index.js`. Supporting modules include:
 
-- `index-core.js`: core AI, account, authentication, and chat behavior.\n- `conversation-context.js`: per-chat continuity summaries and Durable Object storage.
+- `index-core.js`: core AI, account, authentication, and chat behavior.
+- `conversation-context.js`: per-chat continuity summaries and Durable Object storage.
 - `google-auth.js`: Google authentication integration.
 - `memory.js` and `memory-core.js`: memory workflows.
 - `game-api.js`: game and social-game API.
