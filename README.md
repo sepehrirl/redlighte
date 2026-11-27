@@ -253,7 +253,7 @@ It supports:
 - Deduplication and updating of existing memories
 - Filtering of sensitive information from memory storage
 
-The memory analyzer uses the same Qwen 3 model family through Cloudflare Workers AI.
+Memory 2.0 uses the active GLM-4.7 Flash model through Cloudflare Workers AI, validates extracted facts against an exact quote from the latest user message, and keeps deterministic extraction for explicit statements. Persian-aware relevance gating prevents unrelated high-importance memories from entering the prompt. Existing v1–v3 records remain readable and are normalized to the unified v4 schema on the next update. The duplicate extraction engine has been removed.
 
 ---
 
@@ -379,7 +379,7 @@ redlighte/
 │   ├── index-core.js          # Core AI/auth/account/chat logic
 │   ├── google-auth.js         # Google authentication
 │   ├── memory.js              # Memory service
-│   ├── memory-core.js         # Memory storage/retrieval core
+│   ├── memory-store.js        # Memory storage/retrieval core
 │   ├── game-api.js            # Game/social API
 │   ├── room.js                # Room + Durable Objects
 │   ├── live-share.js          # Live-share functionality

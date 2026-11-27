@@ -1,6 +1,6 @@
-import * as core from './memory-core.js';
+import * as core from './memory-store.js';
 
-const MEMORY_ANALYZER_MODEL = '@cf/qwen/qwen3-30b-a3b-fp8';
+const MEMORY_ANALYZER_MODEL = '@cf/zai-org/glm-4.7-flash';
 const MEMORY_TYPES = new Set(['profile','preference','skill','goal','project','communication','fact']);
 
 export const getMemory = core.getMemory;
@@ -24,11 +24,11 @@ export async function extractAndMergeMemory(env, username, userMessage, recentMe
   if (!data.enabled) return null;
 
   const existing = data.memories.filter(m => m.status === 'active').slice(0, 120).map(m => ({
-    id: m.id, key: m.key, type: m.type, content: m.content,
+    id: m.id, key: m.key, type: m.type, content: m.content, evidence: m.evidence || '',
     confidence: m.confidence, importance: m.importance
   }));
 
-  const prompt = `You are Redlighte's dedicated long-term MEMORY ANALYZER.\n\nThis is PASS 2. Another AI already answered the user. Your job is completely separate: inspect EVERY latest user input and decide whether it contains durable user-specific information worth remembering for future conversations.\n\nRemember explicit or clearly expressed: name, family name, stable background; favorites, likes, dislikes and preferences; communication/tone/language/format preferences; skills and experience; long-term goals; ongoing projects; other durable user-specific facts.\n\nExamples that MUST be remembered:\n- اسمم سپهره -> profile\n- اسم و فامیلیم سپهر احمدیه -> profile\n- رنگ مورد علاقه‌م سبزه -> preference\n- ریاضی رو دوست دارم -> preference\n- غذای مورد علاقه‌م قیمه‌ست -> preference\n- با من خودمونی حرف بزن -> communication\n- جواب‌هات رو کوتاه بده -> communication\n- من Python بلدم -> skill\n- هدفم انتشار Redlighte است -> goal\n- دارم روی Redlighte کار می‌کنم -> project\n\nDo NOT remember greetings, questions, one-off requests, temporary states, jokes, or current-turn-only information. Never infer a fact the user did not state. Never store passwords, API keys, tokens, private keys, financial credentials, exact IP addresses, device identifiers, medical or sexual information.\n\nTypes: profile, preference, communication, skill, goal, project, fact.\nIf a previous memory is corrected or superseded, use update and its exact existingId. If it is genuinely new, use create. Never duplicate an unchanged memory.\n\nReturn ONLY JSON. Confidence and importance are required numeric fields. Explicit user statements normally deserve confidence >= 0.95. Long-term identity, preferences, communication preferences, goals and projects normally deserve importance >= 0.85.\nIf nothing is worth saving: {"remember":false}\nIf worth saving: {"remember":true,"action":"create|update","existingId":null,"key":"stable.semantic.key","type":"preference","content":"short durable statement","confidence":0.98,"importance":0.90}\n\nEXISTING MEMORIES:\n${JSON.stringify(existing)}\n\nLATEST USER INPUT:\n${input}\n\nRECENT CONTEXT:\n${JSON.stringify(recentMessages.slice(-8))}`;
+  const prompt = `You are Redlighte's dedicated long-term MEMORY ANALYZER.\n\nThis is PASS 2. Another AI already answered the user. Your job is completely separate: inspect EVERY latest user input and decide whether it contains durable user-specific information worth remembering for future conversations.\n\nRemember explicit or clearly expressed: name, family name, stable background; favorites, likes, dislikes and preferences; communication/tone/language/format preferences; skills and experience; long-term goals; ongoing projects; other durable user-specific facts.\n\nExamples that MUST be remembered:\n- اسمم سپهره -> profile\n- اسم و فامیلیم سپهر احمدیه -> profile\n- رنگ مورد علاقه‌م سبزه -> preference\n- ریاضی رو دوست دارم -> preference\n- غذای مورد علاقه‌م قیمه‌ست -> preference\n- با من خودمونی حرف بزن -> communication\n- جواب‌هات رو کوتاه بده -> communication\n- من Python بلدم -> skill\n- هدفم انتشار Redlighte است -> goal\n- دارم روی Redlighte کار می‌کنم -> project\n\nDo NOT remember greetings, questions, one-off requests, temporary states, jokes, or current-turn-only information. Never infer a fact the user did not state. Never store passwords, API keys, tokens, private keys, financial credentials, exact IP addresses, device identifiers, medical or sexual information.\n\nTypes: profile, preference, communication, skill, goal, project, fact.\nIf a previous memory is corrected or superseded, use update and its exact existingId. If it is genuinely new, use create. Never duplicate an unchanged memory.\n\nReturn ONLY JSON. Confidence and importance are required numeric fields. Explicit user statements normally deserve confidence >= 0.95. Long-term identity, preferences, communication preferences, goals and projects normally deserve importance >= 0.85.\nIf nothing is worth saving: {"remember":false}\nIf worth saving: {"remember":true,"action":"create|update","existingId":null,"key":"stable.semantic.key","type":"preference","content":"short durable statement in the user's language","evidence":"exact contiguous quote copied from the latest user input","confidence":0.98,"importance":0.90}. The evidence must be an exact substring of the latest user input. If you cannot quote it exactly, return remember:false.\n\nEXISTING MEMORIES:\n${JSON.stringify(existing)}\n\nLATEST USER INPUT:\n${input}\n\nRECENT CONTEXT:\n${JSON.stringify(recentMessages.slice(-8))}`;
 
   let candidate = null;
   try {
@@ -43,10 +43,11 @@ export async function extractAndMergeMemory(env, username, userMessage, recentMe
   }
 
   // If the model fails to format its JSON, explicit durable statements still get a safe fallback.
-  if (!candidate || candidate.remember !== true) {
-    candidate = deterministicFallback(input);
-  }
+  if (!candidate || candidate.remember !== true) candidate = deterministicFallback(input);
+  if (candidate && !candidate.evidence) candidate.evidence = input;
   if (!candidate?.remember || typeof candidate.content !== 'string') return null;
+  const evidence = clean(candidate.evidence);
+  if (!evidence || !normalizeText(input).includes(normalizeText(evidence))) return null;
 
   const type = MEMORY_TYPES.has(candidate.type) ? candidate.type : 'fact';
   const content = clean(candidate.content);
@@ -67,15 +68,15 @@ export async function extractAndMergeMemory(env, username, userMessage, recentMe
   try {
     let memory;
     if (targetId) {
-      memory = await core.updateManualMemory(env, username, targetId, { key, type, content });
+      memory = await core.updateManualMemory(env, username, targetId, { key, type, content, evidence });
       if (!memory) {
         // Stale/malformed model ID: safely create/update through the normal dedupe path.
-        memory = await core.addManualMemory(env, username, { key, type, content });
+        memory = await core.addManualMemory(env, username, { key, type, content, evidence });
         return memory ? { memory, action: 'created' } : null;
       }
       return { memory, action: 'updated' };
     }
-    memory = await core.addManualMemory(env, username, { key, type, content });
+    memory = await core.addManualMemory(env, username, { key, type, content, evidence });
     return memory ? { memory, action: 'created' } : null;
   } catch (error) {
     console.error('MEMORY_SECOND_PASS_SAVE_ERROR', error);
