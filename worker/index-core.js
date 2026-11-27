@@ -207,9 +207,9 @@ async function handleChat(request,env){
 
   const memoryContext=buildMemoryContext(selectedMemories);
   const conversationContext=summary
-    ? `[THIS CHAT'S CONTINUITY SUMMARY]\\n${summary}\\n[END THIS CHAT'S CONTINUITY SUMMARY]\\nUse this as context for this conversation only. Recent messages take precedence if they correct an older detail.`
+    ? `[THIS CHAT'S CONTINUITY SUMMARY]\n${summary}\n[END THIS CHAT'S CONTINUITY SUMMARY]\nUse this as context for this conversation only. Recent messages take precedence if they correct an older detail.`
     : '';
-  const systemMessage=[SYSTEM_PROMPT,conversationContext,memoryContext].filter(Boolean).join('\\n\\n');
+  const systemMessage=[SYSTEM_PROMPT,conversationContext,memoryContext].filter(Boolean).join('\n\n');
 
   try{
     const result=await env.AI.run(MODEL,{
@@ -227,7 +227,7 @@ async function handleChat(request,env){
       catch(error){console.error(`[${requestId}] MEMORY_SAVE_ERROR`,error)}
     }
     const finalMessage=memoryEvent?.memory?.content
-      ? `${answer.trim()}\\n\\n🧠 ${memoryEvent.action==='updated'?'Memory updated':'Saved to Memory'} — ${memoryEvent.memory.content}`
+      ? `${answer.trim()}\n\n🧠 ${memoryEvent.action==='updated'?'Memory updated':'Saved to Memory'} — ${memoryEvent.memory.content}`
       : answer.trim();
 
     const completedMessages=[...history,{role:'assistant',content:finalMessage}];
