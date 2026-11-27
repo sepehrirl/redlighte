@@ -15,7 +15,7 @@ export const setMemoryEnabled = core.setMemoryEnabled;
 
 // Second-pass memory engine. It always analyzes the user input independently from the answer pass.
 export async function extractAndMergeMemory(env, username, userMessage, recentMessages = [], conversationId = null) {
-  if (!env?.AI || !username || typeof userMessage !== 'string') return null;
+  if (!username || typeof userMessage !== 'string') return null;
   const input = normalizeText(userMessage);
   if (input.length < 3 || isSensitive(input)) return null;
 
@@ -120,4 +120,4 @@ function clean(value) { return String(value || '').trim().replace(/^[`"'«]+|[`"
 function normalizeKey(value) { return String(value || '').trim().toLowerCase().replace(/[\u200c\s]+/g, '.').replace(/[^\p{L}\p{N}._-]+/gu, '').slice(0, 180); }
 function inferKey(type, content) { return `${type}.${normalizeKey(content).slice(0, 100)}`; }
 function clamp(value, min, max) { const n = Number(value); return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min; }
-function isSensitive(text) { return /password|passcode|api[_ -]?key|token|secret|private key|کلمه عبور|رمز عبور|رمز ورود|کلید api|توکن|شماره کارت|شماره شبا|cvv|medical|diagnos|treatment|medication|بیماری|تشخیص پزشکی|درمان|دارو|sexual|sex life|جنسی/i.test(String(text || '')); }
+function isSensitive(text) { const value=String(text||''); return /password|passcode|api[_ -]?key|token|secret|private key|کلمه عبور|رمز عبور|رمز ورود|کلید api|توکن|شماره کارت|شماره شبا|cvv|medical|diagnos|treatment|medication|بیماری|تشخیص پزشکی|درمان|دارو|sexual|sex life|جنسی|آدرس دقیق|شماره تلفن|شماره موبایل/i.test(value) || /(?:^|\\D)\\+?\\d[\\d\\s().-]{8,}\\d(?:$|\\D)/u.test(value); }

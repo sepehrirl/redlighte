@@ -44,7 +44,7 @@ The documented Worker entry point is `worker/index.js`. Supporting modules inclu
 - `index-core.js`: core AI, account, authentication, and chat behavior.
 - `conversation-context.js`: per-chat continuity summaries and Durable Object storage.
 - `google-auth.js`: Google authentication integration.
-- `memory.js` and `memory-store.js`: the unified Memory 2.0 extraction, storage, and retrieval pipeline. The duplicate extractor formerly embedded in `memory-core.js` has been removed.
+- `memory.js` and `memory-store.js`: the unified Memory 2.0 extraction, storage, and retrieval pipeline. The duplicate extractor from the retired `memory-core.js` file has been removed; `memory-store.js` now contains only storage and retrieval primitives.
 - `game-api.js`: game and social-game API.
 - `room.js`: room services and Durable Objects.
 - `live-share.js`: live-sharing functionality.

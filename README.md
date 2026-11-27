@@ -30,7 +30,7 @@ The main product is **Redlighte AI**, a conversational assistant served through 
 Current implementation includes:
 
 - 🤖 Cloudflare Workers AI
-- 🧠 `@cf/qwen/qwen3-30b-a3b-fp8`
+- 🧠 `@cf/zai-org/glm-4.7-flash`
 - 💬 Conversation context with up to **20 recent messages**
 - 📝 User messages up to **12,000 characters**
 - ⚡ Up to **4,096 generated tokens** per response
@@ -331,7 +331,7 @@ The frontend does not directly receive the GitHub credentials used by the Worker
 | Frontend | HTML, CSS, JavaScript |
 | Backend | Cloudflare Workers |
 | AI Runtime | Cloudflare Workers AI |
-| AI Model | Qwen 3 30B A3B FP8 (`@cf/qwen/qwen3-30b-a3b-fp8`) |
+| AI Model | GLM-4.7 Flash (`@cf/zai-org/glm-4.7-flash`) |
 | Authentication | Custom session-based authentication |
 | Password Hashing | PBKDF2 + SHA-256 |
 | Session Signing | HMAC-SHA-256 |

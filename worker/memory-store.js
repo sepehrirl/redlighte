@@ -16,7 +16,7 @@ export async function getMemory(env, username) {
   const file = await githubFile(env, `users/${username}/memory.json`);
   if (!file) return { file: null, data: emptyMemory() };
   try { return { file, data: normalizeMemory(JSON.parse(file.content)) }; }
-  catch { return { file, data: emptyMemory() }; }
+  catch (error) { console.error('MEMORY_DATA_PARSE_ERROR', error); throw new Error('Memory data could not be read safely.'); }
 }
 
 export async function saveMemory(env, username, data, file, message = 'Update user memory') {
@@ -47,7 +47,7 @@ export async function addManualMemory(env, username, input) {
   const { file, data } = await getMemory(env, username); const content = cleanCaptured(input?.content);
   if (!content) throw new Error('Memory content is required.'); if (isSensitiveCandidate(content)) throw new Error('This type of information cannot be stored in Memory.');
   const type = MEMORY_TYPES.has(input?.type) ? input.type : 'fact'; const key = normalizeKey(input?.key || inferKey(content, type)); const existing = findExistingMemory(data.memories, key, type, content);
-  if (existing) { existing.content=content; existing.type=type; existing.key=key||existing.key||null; existing.confidence=1; existing.importance=1; existing.status='active'; existing.updatedAt=new Date().toISOString(); await saveMemory(env,username,data,file,'Update memory'); return existing; }
+  if (existing) { existing.content=content; existing.evidence=cleanCaptured(input?.evidence||existing.evidence||''); existing.type=type; existing.key=key||existing.key||null; existing.confidence=1; existing.importance=1; existing.status='active'; existing.updatedAt=new Date().toISOString(); await saveMemory(env,username,data,file,'Update memory'); return existing; }
   const now=new Date().toISOString(); const memory={id:crypto.randomUUID(),key:key||null,type,content,evidence:cleanCaptured(input?.evidence||''),confidence:1,importance:1,status:'active',source:{manual:true},createdAt:now,updatedAt:now,lastUsedAt:null};
   data.memories.unshift(memory); data.memories=dedupeAndPrune(data.memories); await saveMemory(env,username,data,file,'Add memory'); return memory;
 }
@@ -89,7 +89,7 @@ function inferKey(content,type){const tokens=tokenize(content).slice(0,8).join('
 function normalizeKey(value){return String(value||'').trim().toLowerCase().replace(/[\u200c\s]+/g,'.').replace(/[^\p{L}\p{N}._-]+/gu,'').slice(0,180);}
 function normalizeText(value){return String(value||'').trim().replace(/[يى]/g,'ی').replace(/[ك]/g,'ک').replace(/\s+/g,' ');}
 function cleanCaptured(value){return String(value||'').trim().replace(/^[`"'«]+|[`"'»]+$/g,'').replace(/[.!؟]+$/u,'').trim().slice(0,500);}
-function isSensitiveCandidate(text){return SENSITIVE_PATTERNS.some(pattern=>pattern.test(String(text||'')));}
+function isSensitiveCandidate(text){const value=String(text||'');return SENSITIVE_PATTERNS.some(pattern=>pattern.test(value))||/(?:^|\\D)\\+?\\d[\\d\\s().-]{8,}\\d(?:$|\\D)/u.test(value)||/آدرس دقیق|شماره تلفن|شماره موبایل/i.test(value);}
 function parseJsonObject(raw){try{return JSON.parse(raw);}catch{}const match=String(raw).match(/\{[\s\S]*\}/);if(!match)return null;try{return JSON.parse(match[0]);}catch{return null;}}
 function clamp(value,min,max){if(!Number.isFinite(value))return min;return Math.min(max,Math.max(min,value));}
 async function githubFile(env,path){const r=await fetch(`https://api.github.com/repos/amirsepehr2020/redlighte-data/contents/${path}?ref=main`,{headers:githubHeaders(env)});if(r.status===404)return null;if(!r.ok)throw new Error(`GitHub GET ${r.status}`);const x=await r.json();const bytes=Uint8Array.from(atob(x.content.replace(/\n/g,'')),c=>c.charCodeAt(0));return{sha:x.sha,content:new TextDecoder().decode(bytes)};}
