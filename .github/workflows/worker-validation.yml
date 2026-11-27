@@ -24,9 +24,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Check Worker module syntax
+      - name: Check application and Worker JavaScript syntax
         run: |
           set -e
+          node --check app.js
           for file in worker/*.js; do
             node --input-type=module --check < "$file"
           done
