@@ -19,6 +19,11 @@ export class ConversationContextDurableObject {
       let value;
       try { value = await request.json(); }
       catch { return Response.json({ error: 'Invalid JSON.' }, { status: 400 }); }
+      const current = await this.state.storage.get('conversation') || emptyConversation();
+      if (value?.expectedMessageCount !== undefined &&
+          Number(value.expectedMessageCount) !== Number(current.messageCount || 0)) {
+        return Response.json({ error: 'Conversation changed during this request.' }, { status: 409 });
+      }
       const conversation = normalizeConversation(value);
       await this.state.storage.put('conversation', conversation);
       return Response.json({ ok: true, updatedAt: conversation.updatedAt });
