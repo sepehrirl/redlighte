@@ -1,0 +1,51 @@
+name: Redlighte Game Validation
+
+on:
+  pull_request:
+    paths:
+      - "game/**"
+      - "worker/game-api.js"
+      - ".github/workflows/game-validation.yml"
+  push:
+    branches: [main]
+    paths:
+      - "game/**"
+      - "worker/game-api.js"
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-and-registry:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Check JavaScript syntax
+        run: |
+          set -e
+          for file in game/*.js game/2048/*.js game/red-dash/*.js worker/game-api.js; do
+            [ -f "$file" ] || continue
+            if [ "$file" = "worker/game-api.js" ]; then
+              node --input-type=module --check < "$file"
+            else
+              node --check "$file"
+            fi
+          done
+      - name: Verify registered games and routes
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const source = fs.readFileSync('game/game-registry.js', 'utf8');
+          const api = fs.readFileSync('worker/game-api.js', 'utf8');
+          const ids = [...source.matchAll(/id:'([^']+)'/g)].map(x => x[1]);
+          if (ids.length < 3) throw new Error('Expected at least three registered games');
+          if (new Set(ids).size !== ids.length) throw new Error('Duplicate game IDs in registry');
+          for (const id of ids) {
+            if (!fs.existsSync(`game/${id}/index.html`)) throw new Error(`Missing route page for ${id}`);
+            if (!api.includes(`'${id}'`)) throw new Error(`Backend does not allow game ID ${id}`);
+          }
+          console.log(`Validated ${ids.length} registered games and routes.`);
+          NODE
