@@ -21,11 +21,11 @@ Cloudflare Worker (worker/index.js)
   |-- Vault API
   |-- Pulse services
   |
-  +--> Cloudflare Workers AI (Qwen model family)
+   +--> Cloudflare Workers AI (GLM-4.7 Flash for chat and chat summaries)
   |
-  +--> Private application-data repository (server-side access)
+  +--> Private application-data repository (account data and personal Memory)
   |
-  +--> Durable Objects + WebSockets (real-time rooms/presence)
+  +--> Durable Objects (per-chat continuity + real-time rooms/presence)
 ```
 
 Static assets are served through the configured Cloudflare assets integration. The Worker routes API requests and invokes the relevant service modules.
@@ -40,7 +40,7 @@ The browser should call same-origin application endpoints. Secrets and privilege
 
 The documented Worker entry point is `worker/index.js`. Supporting modules include:
 
-- `index-core.js`: core AI, account, authentication, and chat behavior.
+- `index-core.js`: core AI, account, authentication, and chat behavior.\n- `conversation-context.js`: per-chat continuity summaries and Durable Object storage.
 - `google-auth.js`: Google authentication integration.
 - `memory.js` and `memory-core.js`: memory workflows.
 - `game-api.js`: game and social-game API.
@@ -53,9 +53,11 @@ Module names and responsibilities should be rechecked against source before refa
 
 ## 5. AI request flow
 
-The main client sends chat requests to the same-origin `/api/chat` endpoint. The Worker handles server-side logic and invokes Cloudflare Workers AI. The README documents the model identifier as `@cf/qwen/qwen3-30b-a3b-fp8`; confirm model availability and binding configuration before changing it.
+The authenticated main client sends chat requests to the same-origin `/api/chat` endpoint with a stable `conversation_id`. The Worker rejects unauthenticated chat requests and scopes each conversation Durable Object by the normalized account username plus conversation ID.
 
-Conversation context, input limits, and output limits are implementation details and should be changed only after checking the current code and platform limits.
+Each chat has its own rolling continuity summary and recent message window. The Worker summarizes older messages as the conversation grows, then supplies that summary alongside recent messages to Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`). The Durable Object retains the summary, message count, and recent transcript so context can be recovered across sessions and devices.
+
+Account-wide personal Memory remains separate and may be added to the system context independently; it must never replace or merge chat-specific context. Pulse reference data is injected separately and is not stored as a conversation turn. Deleting a chat also deletes its Durable Object context through the authenticated context endpoint.
 
 ## 6. Identity, sessions, and data
 
@@ -65,7 +67,7 @@ The public application repository is separate from the private `redlighte-data` 
 
 ## 7. Real-time services
 
-Room functionality is documented as using Cloudflare Durable Objects and WebSockets for room state, presence, indexing, and live sharing. Verify the current Durable Object bindings, migrations, and class names in `wrangler.jsonc` and Worker source before deployment.
+Room functionality uses Cloudflare Durable Objects and WebSockets for room state, presence, indexing, and live sharing. Chat continuity uses a separate `CONVERSATIONS` Durable Object binding and the `v4-conversation-context` migration. Keep the namespaces and data models isolated. Verify all Durable Object bindings, migrations, and class names in `wrangler.jsonc` and Worker source before deployment.
 
 ## 8. Configuration and deployment
 
