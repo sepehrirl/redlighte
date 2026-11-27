@@ -55,7 +55,7 @@ Module names and responsibilities should be rechecked against source before refa
 
 ## 5. AI request flow
 
-The authenticated main client sends chat requests to the same-origin `/api/chat` endpoint with a stable `conversation_id`. The Worker rejects unauthenticated chat requests and scopes each conversation Durable Object by the normalized account username plus conversation ID.
+The authenticated main client sends chat requests to the same-origin `/api/chat` endpoint with a stable `conversation_id`. The Worker rejects unauthenticated chat requests and scopes each conversation Durable Object by the immutable account ID plus conversation ID.
 
 Each chat has its own rolling continuity summary and recent message window. The Worker summarizes older messages as the conversation grows, then supplies that summary alongside recent messages to Cloudflare Workers AI (`@cf/zai-org/glm-4.7-flash`). The Durable Object retains the summary, message count, and recent transcript so context can be recovered across sessions and devices.
 
