@@ -142,13 +142,13 @@ async function writeConversationState(env,username,conversationId,state){
 async function handleChat(request,env){
   const cors=corsHeaders(request),requestId=crypto.randomUUID();
   if(request.method==='OPTIONS')return new Response(null,{status:204,headers:cors});
-  if(request.method==='GET')return json({service:'Redlighte AI',status:env.AI?'ready':'not_configured',provider:'cloudflare-workers-ai',model:MODEL,request_id:requestId},200,cors);
-  if(request.method!=='POST')return json({error:'Method not allowed.'},405,{...cors,Allow:'GET,POST,OPTIONS'});
-  if(!env.AI)return json({error:'AI service is not configured.',code:'AI_NOT_CONFIGURED',request_id:requestId},503,cors);
 
   let session=null;
   try{session=await readSession(request,env)}catch(error){console.error(`[${requestId}] SESSION_READ_ERROR`,error)}
   if(!session)return json({error:'Authentication required.',code:'UNAUTHORIZED',request_id:requestId},401,cors);
+  if(request.method==='GET')return json({service:'Redlighte AI',status:env.AI?'ready':'not_configured',provider:'cloudflare-workers-ai',model:MODEL,request_id:requestId},200,cors);
+  if(request.method!=='POST')return json({error:'Method not allowed.'},405,{...cors,Allow:'GET,POST,OPTIONS'});
+  if(!env.AI)return json({error:'AI service is not configured.',code:'AI_NOT_CONFIGURED',request_id:requestId},503,cors);
   if(!env.CONVERSATIONS)return json({error:'Conversation storage is not configured.',code:'CONVERSATION_STORAGE_UNAVAILABLE',request_id:requestId},503,cors);
 
   let body;
