@@ -106,7 +106,7 @@ async function handleConversationContext(request,env,path){
   if(!match)return json({error:'Invalid conversation ID.'},400,cors);
   if(!env.CONVERSATIONS)return json({error:'Conversation storage is not configured.',code:'CONVERSATION_STORAGE_UNAVAILABLE'},503,cors);
   try{
-    const stub=getConversationStub(env,session.username,match[1]);
+    const stub=getConversationStub(env,session.id,match[1]);
     const result=await stub.fetch('https://conversation-context.internal/state',{method:'DELETE'});
     if(!result.ok)throw new Error('Conversation storage delete failed.');
     return json({ok:true},200,cors);
@@ -116,20 +116,20 @@ async function handleConversationContext(request,env,path){
   }
 }
 
-function getConversationStub(env,username,conversationId){
-  const id=env.CONVERSATIONS.idFromName(`${String(username).toLowerCase()}:${conversationId}`);
+function getConversationStub(env,accountId,conversationId){
+  const id=env.CONVERSATIONS.idFromName(`${String(accountId)}:${conversationId}`);
   return env.CONVERSATIONS.get(id);
 }
 
-async function readConversationState(env,username,conversationId){
-  const stub=getConversationStub(env,username,conversationId);
+async function readConversationState(env,accountId,conversationId){
+  const stub=getConversationStub(env,accountId,conversationId);
   const response=await stub.fetch('https://conversation-context.internal/state');
   if(!response.ok)throw new Error('Conversation context could not be loaded.');
   return await response.json();
 }
 
-async function writeConversationState(env,username,conversationId,state){
-  const stub=getConversationStub(env,username,conversationId);
+async function writeConversationState(env,accountId,conversationId,state){
+  const stub=getConversationStub(env,accountId,conversationId);
   const response=await stub.fetch('https://conversation-context.internal/state',{
     method:'PUT',
     headers:{'Content-Type':'application/json'},
@@ -160,7 +160,7 @@ async function handleChat(request,env){
   if(!/^[a-zA-Z0-9_-]{1,128}$/.test(conversationId))return json({error:'A valid conversation ID is required.',code:'CONVERSATION_ID_REQUIRED',request_id:requestId},400,cors);
 
   let stored;
-  try{stored=await readConversationState(env,session.username,conversationId)}
+  try{stored=await readConversationState(env,session.id,conversationId)}
   catch(error){
     console.error(`[${requestId}] CONVERSATION_LOAD_ERROR`,error);
     return json({error:'Could not load this conversation. Please try again.',code:'CONVERSATION_LOAD_FAILED',request_id:requestId},503,cors);
@@ -239,7 +239,7 @@ async function handleChat(request,env){
     retainedMessages=retainedMessages.slice(-CONVERSATION_LIMITS.maxStoredMessages);
     let contextSaved=true;
     try{
-      await writeConversationState(env,session.username,conversationId,{
+      await writeConversationState(env,session.id,conversationId,{
         version:1,
         summary,
         summarizedThrough,
