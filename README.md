@@ -288,7 +288,7 @@ Redlighte is a lightweight static frontend combined with a serverless Cloudflare
                 ▼               ▼
        ┌────────────────┐  ┌──────────────────┐
        │ Cloudflare AI  │  │ GitHub Data Repo │
-       │ Qwen 3         │  │ users / chats    │
+       │ GLM-4.7 Flash  │  │ users / chats    │
        │                │  │ memory / vault   │
        └────────────────┘  │ game / auth data │
                            └──────────────────┘

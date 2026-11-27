@@ -31,15 +31,17 @@ export async function extractAndMergeMemory(env, username, userMessage, recentMe
   const prompt = `You are Redlighte's dedicated long-term MEMORY ANALYZER.\n\nThis is PASS 2. Another AI already answered the user. Your job is completely separate: inspect EVERY latest user input and decide whether it contains durable user-specific information worth remembering for future conversations.\n\nRemember explicit or clearly expressed: name, family name, stable background; favorites, likes, dislikes and preferences; communication/tone/language/format preferences; skills and experience; long-term goals; ongoing projects; other durable user-specific facts.\n\nExamples that MUST be remembered:\n- اسمم سپهره -> profile\n- اسم و فامیلیم سپهر احمدیه -> profile\n- رنگ مورد علاقه‌م سبزه -> preference\n- ریاضی رو دوست دارم -> preference\n- غذای مورد علاقه‌م قیمه‌ست -> preference\n- با من خودمونی حرف بزن -> communication\n- جواب‌هات رو کوتاه بده -> communication\n- من Python بلدم -> skill\n- هدفم انتشار Redlighte است -> goal\n- دارم روی Redlighte کار می‌کنم -> project\n\nDo NOT remember greetings, questions, one-off requests, temporary states, jokes, or current-turn-only information. Never infer a fact the user did not state. Never store passwords, API keys, tokens, private keys, financial credentials, exact IP addresses, device identifiers, medical or sexual information.\n\nTypes: profile, preference, communication, skill, goal, project, fact.\nIf a previous memory is corrected or superseded, use update and its exact existingId. If it is genuinely new, use create. Never duplicate an unchanged memory.\n\nReturn ONLY JSON. Confidence and importance are required numeric fields. Explicit user statements normally deserve confidence >= 0.95. Long-term identity, preferences, communication preferences, goals and projects normally deserve importance >= 0.85.\nIf nothing is worth saving: {"remember":false}\nIf worth saving: {"remember":true,"action":"create|update","existingId":null,"key":"stable.semantic.key","type":"preference","content":"short durable statement in the user's language","evidence":"exact contiguous quote copied from the latest user input","confidence":0.98,"importance":0.90}. The evidence must be an exact substring of the latest user input. If you cannot quote it exactly, return remember:false.\n\nEXISTING MEMORIES:\n${JSON.stringify(existing)}\n\nLATEST USER INPUT:\n${input}\n\nRECENT CONTEXT:\n${JSON.stringify(recentMessages.slice(-8))}`;
 
   let candidate = null;
-  try {
-    const result = await env.AI.run(MEMORY_ANALYZER_MODEL, {
-      messages: [{ role: 'system', content: prompt }],
-      max_tokens: 600,
-      temperature: 0
-    });
-    candidate = parseObject(result?.response || result?.result?.response || '');
-  } catch (error) {
-    console.error('MEMORY_SECOND_PASS_AI_ERROR', error);
+  if (env?.AI) {
+    try {
+      const result = await env.AI.run(MEMORY_ANALYZER_MODEL, {
+        messages: [{ role: 'system', content: prompt }],
+        max_tokens: 600,
+        temperature: 0
+      });
+      candidate = parseObject(result?.response || result?.result?.response || '');
+    } catch (error) {
+      console.error('MEMORY_SECOND_PASS_AI_ERROR', error);
+    }
   }
 
   // If the model fails to format its JSON, explicit durable statements still get a safe fallback.

@@ -32,7 +32,7 @@ export function retrieveMemories(data, query, limit = MEMORY_CONTEXT_MAX) {
   if (!q.size) return [];
   return data.memories.filter(m => m.status === 'active')
     .map(memory => ({ memory, score: retrievalScore(memory, q) }))
-    .filter(x => x.score >= 0.19)
+    .filter(x => x.score >= 0.06)
     .sort((a, b) => b.score - a.score)
     .slice(0, Math.min(limit, MEMORY_CONTEXT_MAX))
     .map(x => ({ ...x.memory, retrievalScore: Number(x.score.toFixed(4)) }));
