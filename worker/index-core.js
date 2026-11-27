@@ -240,6 +240,7 @@ async function handleChat(request,env){
     let contextSaved=true;
     try{
       await writeConversationState(env,session.id,conversationId,{
+        expectedMessageCount:Number(stored.messageCount)||0,
         version:1,
         summary,
         summarizedThrough,
