@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" fill="none" role="img" aria-labelledby="title desc">
+  <title id="title">Redlighte Account</title>
+  <desc id="desc">Redlighte account identity mark combining a profile silhouette and a luminous red orbit.</desc>
+  <defs>
+    <linearGradient id="bg" x1="13" y1="8" x2="116" y2="122" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#24242C"/>
+      <stop offset="1" stop-color="#0B0B10"/>
+    </linearGradient>
+    <linearGradient id="red" x1="24" y1="20" x2="104" y2="109" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF6675"/>
+      <stop offset=".52" stop-color="#FF3045"/>
+      <stop offset="1" stop-color="#C91531"/>
+    </linearGradient>
+    <linearGradient id="person" x1="42" y1="35" x2="83" y2="99" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#D9D9E2"/>
+    </linearGradient>
+    <filter id="glow" x="8" y="5" width="112" height="118" color-interpolation-filters="sRGB" filterUnits="userSpaceOnUse">
+      <feGaussianBlur stdDeviation="7"/>
+    </filter>
+  </defs>
+  <rect x="4" y="4" width="120" height="120" rx="34" fill="url(#bg)"/>
+  <rect x="4.75" y="4.75" width="118.5" height="118.5" rx="33.25" stroke="#FFFFFF" stroke-opacity=".09" stroke-width="1.5"/>
+  <circle cx="64" cy="63" r="42" stroke="#FF3045" stroke-opacity=".18" stroke-width="9" filter="url(#glow)"/>
+  <path d="M96.5 39.5C106.8 54.2 105.9 74.4 94.2 88.1" stroke="url(#red)" stroke-width="5.5" stroke-linecap="round"/>
+  <circle cx="96.5" cy="39.5" r="5.5" fill="#FF6675"/>
+  <path d="M64 28.5C75.05 28.5 84 37.45 84 48.5C84 59.55 75.05 68.5 64 68.5C52.95 68.5 44 59.55 44 48.5C44 37.45 52.95 28.5 64 28.5Z" fill="url(#person)"/>
+  <path d="M28.5 101.5C31.1 82.4 45.9 71 64 71C82.1 71 96.9 82.4 99.5 101.5C99.7 103 98.5 104.5 96.9 104.5H31.1C29.5 104.5 28.3 103 28.5 101.5Z" fill="url(#person)"/>
+  <path d="M29 88.5C36.7 97.4 48.1 103 60.8 103" stroke="url(#red)" stroke-width="5" stroke-linecap="round"/>
+  <path d="M64 15.5C37.2 15.5 15.5 37.2 15.5 64C15.5 90.8 37.2 112.5 64 112.5" stroke="#FFFFFF" stroke-opacity=".12" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
