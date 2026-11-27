@@ -40,7 +40,13 @@ export async function extractAndMergeMemory(env, username, userMessage, recentMe
       });
       candidate = parseObject(result?.response || result?.result?.response || '');
     } catch (error) {
-      console.error('MEMORY_SECOND_PASS_AI_ERROR', error);
+      const details = {
+        name: error?.name || 'Error',
+        message: String(error?.message || error).slice(0, 500),
+        status: error?.status ?? null,
+        code: error?.code ?? null
+      };
+      console.error('MEMORY_SECOND_PASS_AI_ERROR', JSON.stringify(details));
     }
   }
 
